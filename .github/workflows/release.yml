@@ -55,6 +55,7 @@ jobs:
           else
             version="${{ inputs.version }}"
           fi
+          version="${version#v}"
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
       - name: Build
@@ -113,6 +114,7 @@ jobs:
           else
             version="${{ inputs.version }}"
           fi
+          version="${version#v}"
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
       - uses: softprops/action-gh-release@v2
