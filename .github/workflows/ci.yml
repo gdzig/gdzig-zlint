@@ -1,0 +1,30 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: 0.16.0
+
+      - name: Fetch pinned zlint
+        run: ./scripts/fetch-zlint.sh
+
+      - name: Check formatting
+        run: zig fmt --check build.zig rules
+
+      - name: Run rule tests
+        run: zig build test-rules
+
+      - name: Build release binary
+        run: zig build -Doptimize=ReleaseFast
+
+      - name: Smoke test
+        run: ./zig-out/bin/gdzig-zlint --version

@@ -1,0 +1,12 @@
+diff --git a/src/linter/config/Rules.zig b/src/linter/config/Rules.zig
+index b9dbeb6..de89684 100644
+--- a/src/linter/config/Rules.zig
++++ b/src/linter/config/Rules.zig
+@@ -8,6 +8,7 @@ const RuleConfig = @import("rule_config.zig").RuleConfig;
+ ///
+ /// e.g. `homeless_try: RuleConfig(rules.HomelessTry) = .{}`
+ pub const Rules = blk: {
++    @setEvalBranchQuota(100_000);
+     const len = all_rules.all.len;
+     var names: [len][]const u8 = undefined;
+     var types: [len]type = undefined;

@@ -1,0 +1,126 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version without the leading v"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14
+            target: aarch64-macos
+            asset: gdzig-zlint-macos-aarch64
+          - os: macos-14
+            target: x86_64-macos
+            asset: gdzig-zlint-macos-x86_64
+          - os: ubuntu-latest
+            target: x86_64-linux
+            asset: gdzig-zlint-linux-x86_64
+          - os: ubuntu-latest
+            target: aarch64-linux
+            asset: gdzig-zlint-linux-aarch64
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: 0.16.0
+
+      - name: Fetch pinned zlint
+        run: ./scripts/fetch-zlint.sh
+
+      - name: Resolve version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            version="${GITHUB_REF_NAME#v}"
+          else
+            version="${{ inputs.version }}"
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Build
+        run: >
+          zig build
+          -Doptimize=ReleaseFast
+          -Dtarget=${{ matrix.target }}
+          -Dversion=${{ steps.version.outputs.version }}
+
+      - name: Package
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp zig-out/bin/gdzig-zlint "${{ matrix.asset }}"
+          if command -v sha256sum >/dev/null; then
+            sha256sum "${{ matrix.asset }}" > "${{ matrix.asset }}.sha256"
+          else
+            shasum -a 256 "${{ matrix.asset }}" > "${{ matrix.asset }}.sha256"
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset }}
+          path: |
+            ${{ matrix.asset }}
+            ${{ matrix.asset }}.sha256
+          if-no-files-found: error
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Combine checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd artifacts
+          cat *.sha256 | sort -k2 > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Resolve version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            version="${GITHUB_REF_NAME#v}"
+          else
+            version="${{ inputs.version }}"
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          name: v${{ steps.version.outputs.version }}
+          generate_release_notes: true
+          files: |
+            artifacts/gdzig-zlint-*
+            artifacts/SHA256SUMS
+            THIRD_PARTY_NOTICES.md

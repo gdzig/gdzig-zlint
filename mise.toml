@@ -1,0 +1,14 @@
+[tools]
+zig = "0.16.0"
+
+[tasks.setup]
+description = "Fetch the pinned zlint source into vendor/zlint"
+run = "scripts/fetch-zlint.sh"
+
+[tasks.test]
+description = "Run custom rule tests"
+run = "zig build test-rules"
+
+[tasks.build]
+description = "Build the gdzig-zlint binary"
+run = "zig build -Doptimize=ReleaseFast"

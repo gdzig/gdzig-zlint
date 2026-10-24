@@ -1,0 +1,19 @@
+.{
+    .name = .gdzig_zlint,
+    .version = "0.1.0",
+    .minimum_zig_version = "0.16.0",
+    .fingerprint = 0xfa061fb9bfef935f,
+    .dependencies = .{
+        .zlint = .{ .path = "vendor/zlint" },
+    },
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "rules",
+        "scripts",
+        "patches",
+        "README.md",
+        "THIRD_PARTY_NOTICES.md",
+        "zlint.template.json",
+    },
+}

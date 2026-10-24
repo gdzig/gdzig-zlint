@@ -1,0 +1,34 @@
+{
+  "$schema": "https://raw.githubusercontent.com/DonIsaac/zlint/refs/tags/v0.10.0/zlint.schema.json",
+  "ignore": [
+    "**/*.mixin.zig",
+    "**/*.replace.zig",
+    "src/class/*",
+    "src/builtin/*",
+    "src/global/*"
+  ],
+  "rules": {
+    "gdzig-imports-last": [
+      "warn",
+      {
+        "project_packages": [
+          "common",
+          "compat",
+          "gdzig"
+        ]
+      }
+    ],
+    "gdzig-file-name-case": "warn",
+    "gdzig-import-alias-case": "warn",
+    "gdzig-tests-last": "warn",
+    "homeless-try": "error",
+    "no-unresolved": "off",
+    "unused-decls": "off",
+    "unsafe-undefined": "off",
+    "avoid-as": "off",
+    "no-print": "off",
+    "suppressed-errors": "off",
+    "line-length": "off",
+    "empty-file": "warn"
+  }
+}
