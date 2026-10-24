@@ -29,6 +29,6 @@
     "no-print": "off",
     "suppressed-errors": "off",
     "line-length": "off",
-    "empty-file": "warn"
+    "empty-file": "off"
   }
 }
