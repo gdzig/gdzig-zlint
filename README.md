@@ -132,7 +132,9 @@ lint.dependOn(&@import("zlint").addRunLint(b, zlint_dep).step);
 This path requires Zig 0.16.0 and a ZLint source checkout. ZLint 0.10.0's
 release tarball is not usable as a Zig package dependency because its
 `build.zig.zon` omits `test/` (upstream issue #433). Use a path dependency or a
-patched fork.
+patched fork. Because this repository declares `vendor/zlint` as a path
+dependency, use a local checkout after `mise run setup`, not a fetched tarball,
+until upstream #433 is fixed. The release binary is the primary distribution.
 
 ## Design notes and limitations
 
