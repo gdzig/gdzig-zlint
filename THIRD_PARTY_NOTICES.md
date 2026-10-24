@@ -1,12 +1,16 @@
 # Third-party notices
 
 The release binary is a build of [ZLint](https://github.com/DonIsaac/zlint)
-with additional custom rules. ZLint is distributed under the MIT License.
+with additional custom rules. It includes the following MIT-licensed
+components:
+
+- ZLint, Copyright (c) 2024 Don Isaac
+- smart-pointers, Copyright (c) 2024 Don Isaac
+- chameleon, Copyright (c) 2024 Aritra Karak
+- zig-recover, Copyright (c) 2024 Dimitris Dinodimos
 
 ```text
 MIT License
-
-Copyright (c) 2024 Don Isaac
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal

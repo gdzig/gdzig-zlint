@@ -2,5 +2,5 @@
 zig-out/
 zig-pkg/
 vendor/zlint/
-src/linter/rules/snapshots/
+**/src/linter/rules/snapshots/
 .DS_Store
