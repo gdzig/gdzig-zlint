@@ -75,6 +75,9 @@ The generated `build_options` module is grouped with std.
 }
 ```
 
+The upstream JSON schema does not know the custom rule names, so editors may
+flag those keys as unknown. ZLint still parses and applies them.
+
 Rule options:
 
 - `gdzig-imports-last`
