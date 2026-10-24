@@ -97,7 +97,7 @@ Rule options:
 
 Requirements:
 
-- Zig 0.16.0. ZLint 0.10.0 does not build with Zig 0.17.
+- Zig 0.16.x. ZLint 0.10.0 does not build with Zig 0.17.
 - Git, to fetch the pinned ZLint source.
 
 ```sh
@@ -129,7 +129,7 @@ const lint = b.step("lint", "run gdzig lint");
 lint.dependOn(&@import("zlint").addRunLint(b, zlint_dep).step);
 ```
 
-This path requires Zig 0.16.0 and a ZLint source checkout. ZLint 0.10.0's
+This path requires Zig 0.16.x and a ZLint source checkout. ZLint 0.10.0's
 release tarball is not usable as a Zig package dependency because its
 `build.zig.zon` omits `test/` (upstream issue #433). Use a path dependency or a
 patched fork. Because this repository declares `vendor/zlint` as a path

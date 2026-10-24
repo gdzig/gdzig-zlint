@@ -53,9 +53,9 @@ fn selfRulePaths(b: *std.Build) []const std.Build.LazyPath {
 }
 
 comptime {
-    const required = std.SemanticVersion{ .major = 0, .minor = 16, .patch = 0 };
-    if (builtin.zig_version.order(required) == .lt) {
-        @compileError("gdzig-zlint requires Zig 0.16.0 or newer, found " ++ builtin.zig_version_string);
+    const version = builtin.zig_version;
+    if (version.major != 0 or version.minor != 16) {
+        @compileError("gdzig-zlint requires Zig 0.16.x, found " ++ builtin.zig_version_string);
     }
 }
 
