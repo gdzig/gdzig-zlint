@@ -52,6 +52,14 @@ fn selfRulePaths(b: *std.Build) []const std.Build.LazyPath {
     return paths;
 }
 
+comptime {
+    const required = std.SemanticVersion{ .major = 0, .minor = 16, .patch = 0 };
+    if (builtin.zig_version.order(required) == .lt) {
+        @compileError("gdzig-zlint requires Zig 0.16.0 or newer, found " ++ builtin.zig_version_string);
+    }
+}
+
+const builtin = @import("builtin");
 const std = @import("std");
 
 const zlint = @import("zlint");

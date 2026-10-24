@@ -122,6 +122,7 @@ jobs:
           tag_name: v${{ steps.version.outputs.version }}
           name: v${{ steps.version.outputs.version }}
           generate_release_notes: true
+          fail_on_unmatched_files: true
           files: |
             artifacts/gdzig-zlint-*
             artifacts/SHA256SUMS
