@@ -143,6 +143,7 @@ test ImportAliasCase {
         \\const Config = @import("Config.zig");
         \\const version_dispatch = @import("version_dispatch.zig");
         \\const Version = @import("version.zig").Version;
+        \\const NestedConfig = @import("../NestedConfig.zig");
     ;
     const wrong_type_alias =
         \\const config = @import("Config.zig");
@@ -153,6 +154,9 @@ test ImportAliasCase {
     const wrong_member_alias =
         \\const version = @import("version.zig").Version;
     ;
+    const wrong_relative_alias =
+        \\const nested_config = @import("../NestedConfig.zig");
+    ;
 
     var implementation = ImportAliasCase{};
     var runner = RuleTester.init(testing.allocator, implementation.rule());
@@ -160,14 +164,17 @@ test ImportAliasCase {
     runner.setFileName("Test.zig");
     try runner
         .withPass(&.{passing})
-        .withFail(&.{ wrong_type_alias, wrong_namespace_alias, wrong_member_alias })
+        .withFail(&.{ wrong_type_alias, wrong_namespace_alias, wrong_member_alias, wrong_relative_alias })
         .run();
 
-    var fragment_impl = ImportAliasCase{};
+    const fragment_source =
+        \\const Aabb = @import("Aabb.mixin.zig");
+    ;
+    var fragment_impl = ImportAliasCase{ .skip_fragments = false };
     var fragment_runner = RuleTester.init(testing.allocator, fragment_impl.rule());
     defer fragment_runner.deinit();
     fragment_runner.setFileName("Aabb.mixin.zig");
-    try fragment_runner.withPass(&.{wrong_type_alias}).run();
+    try fragment_runner.withPass(&.{fragment_source}).run();
 }
 
 const std = @import("std");

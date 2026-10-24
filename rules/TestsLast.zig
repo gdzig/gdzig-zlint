@@ -307,6 +307,12 @@ test TestsLast {
         .withFail(&.{ production_after_test, testing_namespace_not_adjacent, import_before_test, nested_test })
         .run();
 
+    var no_check_impl = TestsLast{ .check_testing_namespace = false };
+    var no_check_runner = RuleTester.init(testing.allocator, no_check_impl.rule());
+    defer no_check_runner.deinit();
+    no_check_runner.setFileName("Test.zig");
+    try no_check_runner.withPass(&.{testing_namespace_not_adjacent}).run();
+
     var fragment_impl = TestsLast{};
     var fragment_runner = RuleTester.init(testing.allocator, fragment_impl.rule());
     defer fragment_runner.deinit();

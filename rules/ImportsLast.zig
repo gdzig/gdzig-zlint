@@ -339,6 +339,18 @@ test ImportsLast {
         \\const gdzig = @import("gdzig");
         \\const raw = &gdzig.raw;
     ;
+    const project_packages_source =
+        \\const Thing = @This();
+        \\
+        \\pub fn foo() void {}
+        \\
+        \\const std = @import("std");
+        \\
+        \\const casez = @import("casez");
+        \\
+        \\const common = @import("common");
+        \\const Config = @import("Config.zig");
+    ;
     const import_before_declaration =
         \\const std = @import("std");
         \\
@@ -374,8 +386,14 @@ test ImportsLast {
             passing_build_options,
             passing_unary_alias,
         })
-        .withFail(&.{ import_before_declaration, wrong_group_order, missing_blank_line })
+        .withFail(&.{ import_before_declaration, wrong_group_order, missing_blank_line, project_packages_source })
         .run();
+
+    var project_impl = ImportsLast{ .project_packages = &.{"common"} };
+    var project_runner = RuleTester.init(testing.allocator, project_impl.rule());
+    defer project_runner.deinit();
+    project_runner.setFileName("Test.zig");
+    try project_runner.withPass(&.{project_packages_source}).run();
 
     var fragment_impl = ImportsLast{};
     var fragment_runner = RuleTester.init(testing.allocator, fragment_impl.rule());

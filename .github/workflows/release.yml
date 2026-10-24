@@ -100,7 +100,7 @@ jobs:
         run: |
           set -euo pipefail
           cd artifacts
-          cat *.sha256 | sort -k2 > SHA256SUMS
+          cat ./*.sha256 | sort -k2 > SHA256SUMS
           cat SHA256SUMS
 
       - name: Resolve version

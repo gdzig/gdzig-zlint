@@ -116,18 +116,21 @@ test FileNameCase {
     const namespace_source =
         \\pub fn foo() void {}
     ;
+    const var_source =
+        \\var counter: u32 = 0;
+    ;
 
     var type_impl = FileNameCase{};
     var type_runner = RuleTester.init(testing.allocator, type_impl.rule());
     defer type_runner.deinit();
     type_runner.setFileName("Thing.zig");
-    try type_runner.withPass(&.{type_source}).withFail(&.{namespace_source}).run();
+    try type_runner.withPass(&.{type_source}).withFail(&.{ namespace_source, var_source }).run();
 
     var namespace_impl = FileNameCase{};
     var namespace_runner = RuleTester.init(testing.allocator, namespace_impl.rule());
     defer namespace_runner.deinit();
     namespace_runner.setFileName("thing.zig");
-    try namespace_runner.withPass(&.{namespace_source}).withFail(&.{type_source}).run();
+    try namespace_runner.withPass(&.{ namespace_source, var_source }).withFail(&.{type_source}).run();
 
     var fragment_impl = FileNameCase{ .skip_fragments = false };
     var fragment_runner = RuleTester.init(testing.allocator, fragment_impl.rule());
