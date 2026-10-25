@@ -33,11 +33,11 @@ The release assets are single executables named
 
 ```toml
 [tools]
-"github:gdzig/gdzig-zlint" = "0.5.0"
+"github:gdzig/gdzig-zlint" = "0.6.0"
 ```
 
 ```sh
-mise use -g github:gdzig/gdzig-zlint@0.5.0
+mise use -g github:gdzig/gdzig-zlint@0.6.0
 ```
 
 The asset installs as `gdzig-zlint`; mise also verifies the release checksum.
@@ -183,7 +183,7 @@ tests and the same lint. CI lints tracked Zig files explicitly with
 The release binary is built with:
 
 ```sh
-zig build -Doptimize=ReleaseFast -Dversion=0.5.0
+zig build -Doptimize=ReleaseFast -Dversion=0.6.0
 ```
 
 `zig build -Doptimize=ReleaseFast` is the default `install` step. The binary is
@@ -250,7 +250,7 @@ until upstream #433 is fixed. The release binary is the primary distribution.
 
 ## Release process
 
-Push a tag such as `v0.5.0`. `.github/workflows/release.yml` builds
+Push a tag such as `v0.6.0`. `.github/workflows/release.yml` builds
 `gdzig-zlint` for macOS and Linux, publishes checksums, and attaches the
 binaries to the GitHub release.
 

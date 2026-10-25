@@ -1,6 +1,6 @@
 .{
     .name = .gdzig_zlint,
-    .version = "0.5.0",
+    .version = "0.6.0",
     .minimum_zig_version = "0.16.0",
     .fingerprint = 0xfa061fb9bfef935f,
     .dependencies = .{
