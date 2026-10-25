@@ -17,7 +17,12 @@
         ]
       }
     ],
-    "gdzig-imports-last": "warn",
+    "gdzig-imports-location": [
+      "warn",
+      {
+        "position": "bottom"
+      }
+    ],
     "gdzig-file-name-case": "warn",
     "gdzig-import-alias-case": "warn",
     "gdzig-tests-last": "warn",

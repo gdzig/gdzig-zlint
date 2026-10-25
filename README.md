@@ -10,7 +10,7 @@ pinned ZLint release plus the rules in `rules/`.
 
 | Rule | Checks |
 | --- | --- |
-| `gdzig-imports-last` | Imports and import-derived aliases are placed after all other declarations |
+| `gdzig-imports-location` | Imports and import-derived aliases are placed at the configured position: `bottom` (default) or `top` |
 | `gdzig-imports-sorted` | Imports are ordered std, package, file, with root groups alphabetical and separated by blank lines; safe autofix available |
 | `gdzig-file-name-case` | A file with top-level container fields is a type and uses TitleCase; otherwise it is a namespace and uses snake_case |
 | `gdzig-import-alias-case` | An import alias matches the imported file's name, or the selected member of a namespace file |
@@ -25,11 +25,11 @@ The release assets are single executables named
 
 ```toml
 [tools]
-"github:gdzig/gdzig-zlint" = "0.3.0"
+"github:gdzig/gdzig-zlint" = "0.4.0"
 ```
 
 ```sh
-mise use -g github:gdzig/gdzig-zlint@0.3.0
+mise use -g github:gdzig/gdzig-zlint@0.4.0
 ```
 
 The asset installs as `gdzig-zlint`; mise also verifies the release checksum.
@@ -55,23 +55,26 @@ Pre-commit:
 ```
 
 `gdzig-imports-sorted` has a safe autofix when the imports are already at the
-bottom of the file. The other custom rules, including `gdzig-imports-last`, are
-diagnostics-only. ZLint 0.10.0 can also apply dangerous built-in fixes with
-plain `--fix`, so review the diff before enabling it in pre-commit. The
-import-order fix skips blocks containing comments or interleaved declarations.
+bottom of the file. The other custom rules, including
+`gdzig-imports-location`, are diagnostics-only. ZLint 0.10.0 can also apply
+dangerous built-in fixes with plain `--fix`, so review the diff before enabling
+it in pre-commit. The import-order fix skips blocks containing comments or
+interleaved declarations.
 
 ## Configure a repository
 
 Copy `zlint.template.json` to the repository as `zlint.json`. The two import
-rules are independent: enable either one, or both. `gdzig-imports-last` checks
-placement. `gdzig-imports-sorted` checks that imports are ordered std, then bare
-package names, then file imports, with root groups alphabetical inside each
-section and separated by a blank line. `build_options` is a package import
-unless it is added to `std_modules`.
+rules are independent: enable either one, or both. `gdzig-imports-location`
+checks placement and takes a `position` of `bottom` (default) or `top`.
+`gdzig-imports-sorted` checks that imports are ordered std, then bare package
+names, then file imports, with root groups alphabetical inside each section and
+separated by a blank line. `build_options` is a package import unless it is
+added to `std_modules`.
 
-If you configured 0.2.0, move the `std_modules` option from
-`gdzig-imports-last` to the new `gdzig-imports-sorted` rule. In 0.3.0,
-`gdzig-imports-last` checks placement only.
+Upgrading from 0.3.0: rename `gdzig-imports-last` to
+`gdzig-imports-location`. The default `position` is `bottom`, so behavior is
+unchanged. Upgrading from 0.2.0 also requires moving `std_modules` to
+`gdzig-imports-sorted`; the location rule no longer owns ordering.
 
 ```json
 {
@@ -81,7 +84,10 @@ If you configured 0.2.0, move the `std_modules` option from
       "warn",
       { "std_modules": ["std", "builtin"] }
     ],
-    "gdzig-imports-last": "warn",
+    "gdzig-imports-location": [
+      "warn",
+      { "position": "bottom" }
+    ],
     "gdzig-file-name-case": "warn",
     "gdzig-import-alias-case": "warn",
     "gdzig-tests-last": "warn"
@@ -97,7 +103,8 @@ Rule options:
 - `gdzig-imports-sorted`
   - `skip_fragments` (default `true`)
   - `std_modules` (default `["std", "builtin"]`; order sets priority inside the std section)
-- `gdzig-imports-last`
+- `gdzig-imports-location`
+  - `position` (default `"bottom"`; `bottom` or `top`)
   - `skip_fragments` (default `true`)
 - `gdzig-file-name-case`
   - `skip_fragments` (default `true`)
@@ -126,7 +133,7 @@ zig build test-rules
 The release binary is built with:
 
 ```sh
-zig build -Doptimize=ReleaseFast -Dversion=0.3.0
+zig build -Doptimize=ReleaseFast -Dversion=0.4.0
 ```
 
 `zig build -Doptimize=ReleaseFast` is the default `install` step. The binary is
@@ -163,8 +170,8 @@ until upstream #433 is fixed. The release binary is the primary distribution.
   `zlint.linter.fix` to custom rules; without it, ZLint 0.10.0 keeps the fix
   types private. `gdzig-imports-sorted` is safe-fixable. It rewrites a
   contiguous bottom import block and skips blocks containing comments or
-  interleaved declarations. `gdzig-imports-last` and the other rules remain
-  diagnostics-only.
+  interleaved declarations. `gdzig-imports-location` and the other rules
+  remain diagnostics-only.
 - The vendored ZLint source is pinned to v0.10.0 commit
   `3ef67af7dfed776cb03012563942cdf3a97f1b59`. `patches/` contains two small
   patches: one raises ZLint's comptime branch quota for several custom rules,
@@ -178,7 +185,7 @@ until upstream #433 is fixed. The release binary is the primary distribution.
 
 ## Release process
 
-Push a tag such as `v0.3.0`. `.github/workflows/release.yml` builds
+Push a tag such as `v0.4.0`. `.github/workflows/release.yml` builds
 `gdzig-zlint` for macOS and Linux, publishes checksums, and attaches the
 binaries to the GitHub release.
 

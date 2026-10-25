@@ -1,6 +1,7 @@
 //! ## What This Rule Does
-//! Requires imports and import-derived aliases to appear after all other
-//! root declarations.
+//! Requires imports and import-derived aliases to appear at a configured
+//! location: after all other declarations (`bottom`, the default) or before
+//! all other declarations (`top`).
 //!
 //! Import ordering, grouping, and blank lines are enforced separately by
 //! `gdzig-imports-sorted`. This rule only checks placement, so a file can
@@ -9,18 +10,28 @@
 //! Generated `*.mixin.zig` and `*.replace.zig` fragments are skipped.
 
 pub const meta: Rule.Meta = .{
-    .name = "gdzig-imports-last",
+    .name = "gdzig-imports-location",
     .category = .style,
     .default = .warning,
     .fix = .disabled,
 };
 
+pub const Position = enum {
+    /// Imports follow all other declarations.
+    bottom,
+    /// Imports precede all other declarations.
+    top,
+};
+
+/// Where imports belong relative to the file's other declarations.
+position: Position = .bottom,
+
 /// Skip generated mixin and replace fragments.
 skip_fragments: bool = true,
 
-const ImportsLast = @This();
+const ImportsLocation = @This();
 
-pub fn runOnce(self: *const ImportsLast, ctx: *LinterContext) void {
+pub fn runOnce(self: *const ImportsLocation, ctx: *LinterContext) void {
     if (self.skip_fragments and isFragment(ctx.source.pathname)) return;
 
     const ast = ctx.ast();
@@ -31,24 +42,48 @@ pub fn runOnce(self: *const ImportsLast, ctx: *LinterContext) void {
     defer import_decls.deinit(ctx.gpa);
     if (import_decls.items.len == 0) return;
 
-    var last_non_import: ?usize = null;
-    for (roots, 0..) |decl, i| {
-        if (!isImportDecl(import_decls.items, decl)) last_non_import = i;
-    }
-    const last = last_non_import orelse return;
+    switch (self.position) {
+        .bottom => {
+            var last_non_import: ?usize = null;
+            for (roots, 0..) |decl, i| {
+                if (!isImportDecl(import_decls.items, decl)) last_non_import = i;
+            }
+            const last = last_non_import orelse return;
 
-    for (roots, 0..) |decl, i| {
-        if (i > last) break;
-        if (!isImportDecl(import_decls.items, decl)) continue;
-        ctx.report(ctx.diagnostic(
-            "imports and import-derived aliases must be placed after all other declarations",
-            .{ ctx.spanN(decl), ctx.spanN(roots[last]) },
-        ));
-        return;
+            for (roots, 0..) |decl, i| {
+                if (i >= last) break;
+                if (!isImportDecl(import_decls.items, decl)) continue;
+                ctx.report(ctx.diagnostic(
+                    "imports and import-derived aliases must be placed after all other declarations",
+                    .{ ctx.spanN(decl), ctx.spanN(roots[last]) },
+                ));
+                return;
+            }
+        },
+        .top => {
+            var first_non_import: ?usize = null;
+            for (roots, 0..) |decl, i| {
+                if (!isImportDecl(import_decls.items, decl)) {
+                    first_non_import = i;
+                    break;
+                }
+            }
+            const first = first_non_import orelse return;
+
+            for (roots, 0..) |decl, i| {
+                if (i <= first) continue;
+                if (!isImportDecl(import_decls.items, decl)) continue;
+                ctx.report(ctx.diagnostic(
+                    "imports and import-derived aliases must be placed before all other declarations",
+                    .{ ctx.spanN(decl), ctx.spanN(roots[first]) },
+                ));
+                return;
+            }
+        },
     }
 }
 
-pub fn rule(self: *ImportsLast) Rule {
+pub fn rule(self: *ImportsLocation) Rule {
     return Rule.init(self);
 }
 
@@ -60,7 +95,6 @@ fn isFragment(path: ?[]const u8) bool {
 fn collectImportDecls(ctx: *LinterContext) std.ArrayListUnmanaged(Node.Index) {
     const ast = ctx.ast();
     var decls: std.ArrayListUnmanaged(Node.Index) = .empty;
-    errdefer decls.deinit(ctx.gpa);
     var names: std.ArrayListUnmanaged([]const u8) = .empty;
     defer names.deinit(ctx.gpa);
 
@@ -151,9 +185,9 @@ fn importPathFromCall(ast: *const Ast, call: Node.Index) ?[]const u8 {
     return raw[1 .. raw.len - 1];
 }
 
-test ImportsLast {
+test ImportsLocation {
     @setEvalBranchQuota(100_000);
-    const passing =
+    const bottom_passing =
         \\const Thing = @This();
         \\
         \\pub fn foo() void {}
@@ -161,7 +195,7 @@ test ImportsLast {
         \\const casez = @import("casez");
         \\const std = @import("std");
     ;
-    const passing_aliases =
+    const bottom_passing_aliases =
         \\const Thing = @This();
         \\
         \\pub fn foo() void {}
@@ -171,6 +205,25 @@ test ImportsLast {
         \\const Writer = Io.Writer;
         \\
         \\const casez = @import("casez");
+    ;
+    const top_passing =
+        \\const std = @import("std");
+        \\const casez = @import("casez");
+        \\
+        \\const Thing = @This();
+        \\
+        \\pub fn foo() void {}
+    ;
+    const top_passing_aliases =
+        \\const std = @import("std");
+        \\const Io = std.Io;
+        \\const Writer = Io.Writer;
+        \\
+        \\const casez = @import("casez");
+        \\
+        \\const Thing = @This();
+        \\
+        \\pub fn foo() void {}
     ;
     const only_imports =
         \\const std = @import("std");
@@ -182,6 +235,13 @@ test ImportsLast {
         \\const Thing = @This();
         \\
         \\pub fn foo() void {}
+    ;
+    const import_at_bottom =
+        \\const Thing = @This();
+        \\
+        \\pub fn foo() void {}
+        \\
+        \\const std = @import("std");
     ;
     const mixed =
         \\const std = @import("std");
@@ -196,23 +256,38 @@ test ImportsLast {
         \\
         \\pub fn foo() void {}
     ;
+    const derived_alias_at_bottom =
+        \\pub fn foo() void {}
+        \\
+        \\const std = @import("std");
+        \\const Writer = std.Io.Writer;
+    ;
 
-    var implementation = ImportsLast{};
-    var runner = RuleTester.init(testing.allocator, implementation.rule());
-    defer runner.deinit();
-    runner.setFileName("Test.zig");
-    try runner
-        .withPass(&.{ passing, passing_aliases, only_imports })
+    var bottom_impl = ImportsLocation{};
+    var bottom_runner = RuleTester.init(testing.allocator, bottom_impl.rule());
+    defer bottom_runner.deinit();
+    bottom_runner.setFileName("Test.zig");
+    try bottom_runner
+        .withPass(&.{ bottom_passing, bottom_passing_aliases, only_imports })
         .withFail(&.{ import_at_top, mixed, derived_alias_at_top })
         .run();
 
-    var fragment_impl = ImportsLast{};
+    var top_impl = ImportsLocation{ .position = .top };
+    var top_runner = RuleTester.init(testing.allocator, top_impl.rule());
+    defer top_runner.deinit();
+    top_runner.setFileName("Test.zig");
+    try top_runner
+        .withPass(&.{ top_passing, top_passing_aliases, import_at_top, only_imports })
+        .withFail(&.{ import_at_bottom, mixed, derived_alias_at_bottom })
+        .run();
+
+    var fragment_impl = ImportsLocation{};
     var fragment_runner = RuleTester.init(testing.allocator, fragment_impl.rule());
     defer fragment_runner.deinit();
     fragment_runner.setFileName("Aabb.mixin.zig");
     try fragment_runner.withPass(&.{import_at_top}).run();
 
-    var fragment_check = ImportsLast{ .skip_fragments = false };
+    var fragment_check = ImportsLocation{ .skip_fragments = false };
     var fragment_check_runner = RuleTester.init(testing.allocator, fragment_check.rule());
     defer fragment_check_runner.deinit();
     fragment_check_runner.setFileName("Aabb.mixin.zig");
