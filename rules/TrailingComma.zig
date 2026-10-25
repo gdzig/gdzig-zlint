@@ -6,6 +6,9 @@
 //! a trailing comma. This rule adds that comma, so formatting takes care of the
 //! layout.
 //!
+//! Multiline string fields are diagnostics-only. Inserting a comma at the
+//! token boundary would change the string value.
+//!
 //! Single-line struct literals are left alone.
 //!
 //! Hand-written `*.mixin.zig` and `*.replace.zig` fragments are linted. Set
@@ -79,41 +82,22 @@ pub fn rule(self: *TrailingComma) Rule {
 
 fn report(ctx: *LinterContext, last: Node.Index, comptime message: []const u8) void {
     const ast = ctx.ast();
-    const end = ctx.semantic.nodeSpan(last).end;
     const last_token = ast.lastToken(last);
-    const fix: CommaFix = if (ast.tokenTag(last_token) == .multiline_string_literal_line)
-        multilineStringFix(ctx, end)
-    else
-        CommaFix{ .position = end, .kind = .inline_comma };
     const diagnostic = ctx.diagnostic(message, .{ctx.spanN(last)});
-    ctx.reportWithFix(fix, diagnostic, &applyFix);
+    if (ast.tokenTag(last_token) == .multiline_string_literal_line) {
+        ctx.report(diagnostic);
+        return;
+    }
+    const end = ctx.semantic.nodeSpan(last).end;
+    ctx.reportWithFix(CommaFix{ .position = end }, diagnostic, &applyFix);
 }
-
-const CommaKind = enum { inline_comma, after_line_lf, after_line_crlf, at_eof };
 
 const CommaFix = struct {
     position: u32,
-    kind: CommaKind,
 };
 
 fn applyFix(fix: CommaFix, builder: Fix.Builder) anyerror!Fix {
-    return switch (fix.kind) {
-        .inline_comma => builder.replace(Span.new(fix.position, fix.position), .static(",")),
-        .after_line_lf => builder.replace(Span.new(fix.position, fix.position), .static(",\n")),
-        .after_line_crlf => builder.replace(Span.new(fix.position, fix.position), .static(",\r\n")),
-        .at_eof => builder.replace(Span.new(fix.position, fix.position), .static("\n,")),
-    };
-}
-
-fn multilineStringFix(ctx: *LinterContext, end: u32) CommaFix {
-    const source = ctx.source.text();
-    if (end < source.len and source[end] == '\r' and end + 1 < source.len and source[end + 1] == '\n') {
-        return .{ .position = end + 2, .kind = .after_line_crlf };
-    }
-    if (end < source.len and source[end] == '\n') {
-        return .{ .position = end + 1, .kind = .after_line_lf };
-    }
-    return .{ .position = end, .kind = .at_eof };
+    return builder.replace(Span.new(fix.position, fix.position), .static(","));
 }
 
 const helpers = struct {
@@ -219,10 +203,6 @@ test TrailingComma {
             .{
                 .src = failing_single,
                 .expected = fixed_single,
-            },
-            .{
-                .src = failing_multiline_string,
-                .expected = fixed_multiline_string,
             },
         })
         .run();

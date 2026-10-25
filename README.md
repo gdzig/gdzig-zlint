@@ -71,6 +71,8 @@ containing comments or interleaved declarations.
 
 Run `gdzig-zlint --fix`, then `zig fmt`, after enabling
 `gdzig-trailing-comma`. The rule adds the comma; `zig fmt` expands the fields.
+Multiline string fields are diagnostics-only because inserting a comma at the
+token boundary would change the string value.
 
 ## Configure a repository
 
