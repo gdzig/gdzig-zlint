@@ -37,8 +37,9 @@ mise use -g github:gdzig/gdzig-zlint@0.1.0
 ```
 
 An existing `GITHUB_TOKEN` or `gh auth login` also works. The asset installs
-as `gdzig-zlint`; mise also verifies the release checksum. Then run it like
-ZLint:
+as `gdzig-zlint`; mise also verifies the release checksum. Pin a version: a
+brand-new release can be hidden from `latest` by mise's `minimum_release_age`
+cooldown until it ages. Then run it like ZLint:
 
 ```sh
 gdzig-zlint --version
