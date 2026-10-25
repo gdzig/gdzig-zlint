@@ -24,6 +24,7 @@ check_testing_namespace: bool = true,
 
 const TestsLast = @This();
 
+/// Checks that tests are grouped after production declarations.
 pub fn runOnce(self: *const TestsLast, ctx: *LinterContext) void {
     if (self.skip_fragments and helpers.isFragment(ctx.source.pathname)) return;
 
@@ -85,6 +86,7 @@ pub fn runOnce(self: *const TestsLast, ctx: *LinterContext) void {
     }
 }
 
+/// Checks that test declarations are at file scope.
 pub fn runOnNode(self: *const TestsLast, wrapper: NodeWrapper, ctx: *LinterContext) void {
     if (self.skip_fragments and helpers.isFragment(ctx.source.pathname)) return;
     if (wrapper.node.tag != .test_decl) return;
@@ -98,8 +100,9 @@ pub fn runOnNode(self: *const TestsLast, wrapper: NodeWrapper, ctx: *LinterConte
     }
 }
 
+/// Returns the rule descriptor.
 pub fn rule(self: *TestsLast) Rule {
-    return Rule.init(self);
+    return .init(self);
 }
 
 const helpers = struct {
@@ -157,12 +160,18 @@ const helpers = struct {
         switch (ast.nodeTag(node)) {
             .builtin_call_two, .builtin_call_two_comma, .builtin_call, .builtin_call_comma => {
                 const path = importPathFromCall(ast, node) orelse return null;
-                return .{ .path = path, .member = null };
+                return .{
+                    .path = path,
+                    .member = null,
+                };
             },
             .field_access => {
                 const data = ast.nodeData(node).node_and_token;
                 const base = importInfoFromExpr(ast, data[0]) orelse return null;
-                return .{ .path = base.path, .member = ast.tokenSlice(data[1]) };
+                return .{
+                    .path = base.path,
+                    .member = ast.tokenSlice(data[1]),
+                };
             },
             else => return null,
         }

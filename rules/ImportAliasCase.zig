@@ -21,6 +21,7 @@ skip_fragments: bool = true,
 
 const ImportAliasCase = @This();
 
+/// Checks import aliases against the imported file's name.
 pub fn runOnce(self: *const ImportAliasCase, ctx: *LinterContext) void {
     const pathname = ctx.source.pathname orelse return;
     if (self.skip_fragments and helpers.isFragment(pathname)) return;
@@ -45,8 +46,9 @@ pub fn runOnce(self: *const ImportAliasCase, ctx: *LinterContext) void {
     }
 }
 
+/// Returns the rule descriptor.
 pub fn rule(self: *ImportAliasCase) Rule {
-    return Rule.init(self);
+    return .init(self);
 }
 
 const helpers = struct {
@@ -118,12 +120,18 @@ const helpers = struct {
         switch (ast.nodeTag(node)) {
             .builtin_call_two, .builtin_call_two_comma, .builtin_call, .builtin_call_comma => {
                 const path = importPathFromCall(ast, node) orelse return null;
-                return .{ .path = path, .member = null };
+                return .{
+                    .path = path,
+                    .member = null,
+                };
             },
             .field_access => {
                 const data = ast.nodeData(node).node_and_token;
                 const base = importInfoFromExpr(ast, data[0]) orelse return null;
-                return .{ .path = base.path, .member = ast.tokenSlice(data[1]) };
+                return .{
+                    .path = base.path,
+                    .member = ast.tokenSlice(data[1]),
+                };
             },
             else => return null,
         }

@@ -15,8 +15,13 @@ pinned ZLint release plus the rules in `rules/`.
 | `gdzig-file-name-case` | A file with top-level container fields is a type and uses TitleCase; otherwise it is a namespace and uses snake_case |
 | `gdzig-import-alias-case` | An import alias matches the imported file's name, or the selected member of a namespace file |
 | `gdzig-tests-last` | Tests are at file scope, grouped after production declarations and before the final imports; `testing` sits directly above the first test |
+| `gdzig-trailing-comma` | Multi-field container declarations and multiline struct literals end with a trailing comma, so `zig fmt` puts each field on its own line; safe autofix available |
+| `gdzig-public-docs` | Public functions have a `///` doc comment describing purpose, inputs, and significant return or error behavior |
+| `gdzig-inferred-initializers` | Uses `.{}` and `.init(...)` when the destination type is already known, including matching return types; safe autofix available |
+| `gdzig-testing-usage` | A `testing` namespace is only referenced inside test blocks or inside the namespace itself |
 
 All custom rules skip generated `*.mixin.zig` and `*.replace.zig` fragments.
+The template also enables ZLint's built-in `line-length` rule at 120 columns.
 
 ## Install the binary
 
@@ -55,11 +60,14 @@ Pre-commit:
 ```
 
 `gdzig-imports-sorted` has a safe autofix when the imports are already at the
-bottom of the file. The other custom rules, including
-`gdzig-imports-placement`, are diagnostics-only. ZLint 0.10.0 can also apply
-dangerous built-in fixes with plain `--fix`, so review the diff before enabling
-it in pre-commit. The import-order fix skips blocks containing comments or
-interleaved declarations.
+bottom of the file. `gdzig-trailing-comma` and `gdzig-inferred-initializers`
+also have safe autofixes. The other custom rules are diagnostics-only. ZLint
+0.10.0 can also apply dangerous built-in fixes with plain `--fix`, so review the
+diff before enabling it in pre-commit. The import-order fix skips blocks
+containing comments or interleaved declarations.
+
+Run `gdzig-zlint --fix`, then `zig fmt`, after enabling
+`gdzig-trailing-comma`. The rule adds the comma; `zig fmt` expands the fields.
 
 ## Configure a repository
 
@@ -94,7 +102,12 @@ Upgrading: rename `gdzig-imports-location` (0.4.0) or `gdzig-imports-last`
     ],
     "gdzig-file-name-case": "warn",
     "gdzig-import-alias-case": "warn",
-    "gdzig-tests-last": "warn"
+    "gdzig-tests-last": "warn",
+    "gdzig-trailing-comma": "warn",
+    "gdzig-public-docs": "warn",
+    "gdzig-inferred-initializers": "warn",
+    "gdzig-testing-usage": "warn",
+    "line-length": ["warn", { "max_length": 120 }]
   }
 }
 ```
@@ -117,6 +130,22 @@ Rule options:
 - `gdzig-tests-last`
   - `skip_fragments` (default `true`)
   - `check_testing_namespace` (default `true`)
+- `gdzig-trailing-comma`
+  - `skip_fragments` (default `true`)
+- `gdzig-public-docs`
+  - `skip_fragments` (default `true`)
+- `gdzig-inferred-initializers`
+  - `skip_fragments` (default `true`)
+  - `check_returns` (default `true`)
+- `gdzig-testing-usage`
+  - `skip_fragments` (default `true`)
+  - `namespace` (default `"testing"`)
+
+`gdzig-inferred-initializers` handles annotated variable declarations and
+returns whose type matches the explicit initializer. It does not inspect
+function arguments. `gdzig-testing-usage` is syntactic: it reports member
+access such as `module.testing.helper` outside a test block, but cannot check
+whether that namespace is actually `pub` for external callers.
 
 These are fields on the custom rules, parsed by ZLint from `zlint.json`. They
 are not ZLint built-in settings.
@@ -189,6 +218,14 @@ until upstream #433 is fixed. The release binary is the primary distribution.
 - ZLint's `ignore` handling has rough edges. The rules skip fragments
   themselves, and CI passes tracked files explicitly:
   `git ls-files '*.zig' | gdzig-zlint --stdin --deny-warnings`.
+- Generated code is out of scope. Rules skip `*.mixin.zig` and
+  `*.replace.zig`, and consumers should ignore generated directories
+  wholesale, as gdzig does. ZLint 0.10.0 has one rule set per run and no
+  per-directory overrides, so correctness-only linting of generated output
+  needs a separate invocation and config.
+- ZLint 0.10.0 has no rule groups, presets, or `extends`. A preset is a
+  complete `zlint.json`; this repository ships `zlint.template.json` as the
+  single recommended set.
 - Run `--fix` for the import order, move any misplaced imports by hand, review
   the diff, then turn on `--deny-warnings` in CI. The custom import-order fix
   is conservative; ZLint's built-in fixes need separate review.

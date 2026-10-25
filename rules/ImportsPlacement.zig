@@ -31,6 +31,7 @@ skip_fragments: bool = true,
 
 const ImportsPlacement = @This();
 
+/// Checks where the import block sits relative to other declarations.
 pub fn runOnce(self: *const ImportsPlacement, ctx: *LinterContext) void {
     if (self.skip_fragments and isFragment(ctx.source.pathname)) return;
 
@@ -83,8 +84,9 @@ pub fn runOnce(self: *const ImportsPlacement, ctx: *LinterContext) void {
     }
 }
 
+/// Returns the rule descriptor.
 pub fn rule(self: *ImportsPlacement) Rule {
-    return Rule.init(self);
+    return .init(self);
 }
 
 fn isFragment(path: ?[]const u8) bool {

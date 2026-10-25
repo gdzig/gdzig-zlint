@@ -4,6 +4,10 @@ const rule_files = [_][]const u8{
     "rules/ImportsPlacement.zig",
     "rules/ImportsSorted.zig",
     "rules/TestsLast.zig",
+    "rules/TrailingComma.zig",
+    "rules/PublicDocs.zig",
+    "rules/InferredInitializers.zig",
+    "rules/TestingUsage.zig",
 };
 
 /// Rule source paths for a consumer's zlint dependency.
@@ -21,6 +25,7 @@ pub fn customRulePaths(dep: *std.Build.Dependency) []const std.Build.LazyPath {
     return paths;
 }
 
+/// Builds the gdzig-zlint binary and its test and lint steps.
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});

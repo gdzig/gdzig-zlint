@@ -26,6 +26,10 @@
     "gdzig-file-name-case": "warn",
     "gdzig-import-alias-case": "warn",
     "gdzig-tests-last": "warn",
+    "gdzig-trailing-comma": "warn",
+    "gdzig-public-docs": "warn",
+    "gdzig-inferred-initializers": "warn",
+    "gdzig-testing-usage": "warn",
     "homeless-try": "error",
     "no-unresolved": "off",
     "unused-decls": "off",
@@ -33,7 +37,12 @@
     "avoid-as": "off",
     "no-print": "off",
     "suppressed-errors": "off",
-    "line-length": "off",
+    "line-length": [
+      "warn",
+      {
+        "max_length": 120
+      }
+    ],
     "empty-file": "off"
   }
 }

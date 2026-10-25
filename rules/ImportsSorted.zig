@@ -32,6 +32,7 @@ std_modules: []const []const u8 = &.{ "std", "builtin" },
 
 const ImportsSorted = @This();
 
+/// Checks import ordering, grouping, and blank lines.
 pub fn runOnce(self: *const ImportsSorted, ctx: *LinterContext) void {
     if (self.skip_fragments and helpers.isFragment(ctx.source.pathname)) return;
 
@@ -88,8 +89,9 @@ pub fn runOnce(self: *const ImportsSorted, ctx: *LinterContext) void {
     }
 }
 
+/// Returns the rule descriptor.
 pub fn rule(self: *ImportsSorted) Rule {
-    return Rule.init(self);
+    return .init(self);
 }
 
 const helpers = struct {
@@ -195,12 +197,18 @@ const helpers = struct {
         switch (ast.nodeTag(node)) {
             .builtin_call_two, .builtin_call_two_comma, .builtin_call, .builtin_call_comma => {
                 const path = importPathFromCall(ast, node) orelse return null;
-                return .{ .path = path, .member = null };
+                return .{
+                    .path = path,
+                    .member = null,
+                };
             },
             .field_access => {
                 const data = ast.nodeData(node).node_and_token;
                 const base = importInfoFromExpr(ast, data[0]) orelse return null;
-                return .{ .path = base.path, .member = ast.tokenSlice(data[1]) };
+                return .{
+                    .path = base.path,
+                    .member = ast.tokenSlice(data[1]),
+                };
             },
             else => return null,
         }
@@ -265,7 +273,10 @@ const helpers = struct {
                 .std_rank = root.std_rank,
                 .is_derived = info.member != null,
             }) catch @panic("OOM");
-            result.names.append(ctx.gpa, .{ .name = name, .root = root }) catch @panic("OOM");
+            result.names.append(ctx.gpa, .{
+                .name = name,
+                .root = root,
+            }) catch @panic("OOM");
         }
 
         var changed = true;
@@ -286,7 +297,10 @@ const helpers = struct {
                     .std_rank = root.std_rank,
                     .is_derived = true,
                 }) catch @panic("OOM");
-                result.names.append(ctx.gpa, .{ .name = name, .root = root }) catch @panic("OOM");
+                result.names.append(ctx.gpa, .{
+                    .name = name,
+                    .root = root,
+                }) catch @panic("OOM");
                 changed = true;
             }
         }
@@ -448,7 +462,10 @@ const helpers = struct {
             }
         }
 
-        return .{ .span = span, .replacement = buffer.items };
+        return .{
+            .span = span,
+            .replacement = buffer.items,
+        };
     }
 
     fn applyReorder(fix: ReorderFix, builder: Fix.Builder) anyerror!Fix {
@@ -577,7 +594,10 @@ test ImportsSorted {
             missing_blank_line,
             split_alias,
         })
-        .withFix(&.{.{ .src = fix_source, .expected = fix_expected }})
+        .withFix(&.{.{
+            .src = fix_source,
+            .expected = fix_expected,
+        }})
         .run();
 
     const build_options_with_std =

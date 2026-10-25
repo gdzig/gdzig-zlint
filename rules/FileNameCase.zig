@@ -18,6 +18,7 @@ skip_fragments: bool = true,
 
 const FileNameCase = @This();
 
+/// Checks the file's name against the type or namespace convention.
 pub fn runOnce(self: *const FileNameCase, ctx: *LinterContext) void {
     const pathname = ctx.source.pathname orelse return;
     if (self.skip_fragments and helpers.isFragment(pathname)) return;
@@ -53,8 +54,9 @@ pub fn runOnce(self: *const FileNameCase, ctx: *LinterContext) void {
     }
 }
 
+/// Returns the rule descriptor.
 pub fn rule(self: *FileNameCase) Rule {
-    return Rule.init(self);
+    return .init(self);
 }
 
 const helpers = struct {
