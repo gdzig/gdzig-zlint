@@ -17,7 +17,7 @@
         ]
       }
     ],
-    "gdzig-imports-location": [
+    "gdzig-imports-placement": [
       "warn",
       {
         "position": "bottom"

@@ -13,7 +13,7 @@
 //!
 //! `build_options` is a package import unless it is added to `std_modules`.
 //!
-//! Import placement is enforced separately by `gdzig-imports-location`.
+//! Import placement is enforced separately by `gdzig-imports-placement`.
 //!
 //! Generated `*.mixin.zig` and `*.replace.zig` fragments are skipped.
 

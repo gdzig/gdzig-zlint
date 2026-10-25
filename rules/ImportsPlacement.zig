@@ -10,7 +10,7 @@
 //! Generated `*.mixin.zig` and `*.replace.zig` fragments are skipped.
 
 pub const meta: Rule.Meta = .{
-    .name = "gdzig-imports-location",
+    .name = "gdzig-imports-placement",
     .category = .style,
     .default = .warning,
     .fix = .disabled,
@@ -29,9 +29,9 @@ position: Position = .bottom,
 /// Skip generated mixin and replace fragments.
 skip_fragments: bool = true,
 
-const ImportsLocation = @This();
+const ImportsPlacement = @This();
 
-pub fn runOnce(self: *const ImportsLocation, ctx: *LinterContext) void {
+pub fn runOnce(self: *const ImportsPlacement, ctx: *LinterContext) void {
     if (self.skip_fragments and isFragment(ctx.source.pathname)) return;
 
     const ast = ctx.ast();
@@ -83,7 +83,7 @@ pub fn runOnce(self: *const ImportsLocation, ctx: *LinterContext) void {
     }
 }
 
-pub fn rule(self: *ImportsLocation) Rule {
+pub fn rule(self: *ImportsPlacement) Rule {
     return Rule.init(self);
 }
 
@@ -185,7 +185,7 @@ fn importPathFromCall(ast: *const Ast, call: Node.Index) ?[]const u8 {
     return raw[1 .. raw.len - 1];
 }
 
-test ImportsLocation {
+test ImportsPlacement {
     @setEvalBranchQuota(100_000);
     const bottom_passing =
         \\const Thing = @This();
@@ -263,7 +263,7 @@ test ImportsLocation {
         \\const Writer = std.Io.Writer;
     ;
 
-    var bottom_impl = ImportsLocation{};
+    var bottom_impl = ImportsPlacement{};
     var bottom_runner = RuleTester.init(testing.allocator, bottom_impl.rule());
     defer bottom_runner.deinit();
     bottom_runner.setFileName("Test.zig");
@@ -272,7 +272,7 @@ test ImportsLocation {
         .withFail(&.{ import_at_top, mixed, derived_alias_at_top })
         .run();
 
-    var top_impl = ImportsLocation{ .position = .top };
+    var top_impl = ImportsPlacement{ .position = .top };
     var top_runner = RuleTester.init(testing.allocator, top_impl.rule());
     defer top_runner.deinit();
     top_runner.setFileName("Test.zig");
@@ -281,13 +281,13 @@ test ImportsLocation {
         .withFail(&.{ import_at_bottom, mixed, derived_alias_at_bottom })
         .run();
 
-    var fragment_impl = ImportsLocation{};
+    var fragment_impl = ImportsPlacement{};
     var fragment_runner = RuleTester.init(testing.allocator, fragment_impl.rule());
     defer fragment_runner.deinit();
     fragment_runner.setFileName("Aabb.mixin.zig");
     try fragment_runner.withPass(&.{import_at_top}).run();
 
-    var fragment_check = ImportsLocation{ .skip_fragments = false };
+    var fragment_check = ImportsPlacement{ .skip_fragments = false };
     var fragment_check_runner = RuleTester.init(testing.allocator, fragment_check.rule());
     defer fragment_check_runner.deinit();
     fragment_check_runner.setFileName("Aabb.mixin.zig");
