@@ -71,6 +71,10 @@ names, then file imports, with root groups alphabetical inside each section and
 separated by a blank line. `build_options` is a package import unless it is
 added to `std_modules`.
 
+This repository checks in its own `zlint.json`, derived from the template with
+local `ignore` entries for `vendor/`, build outputs, and snapshots. Consumers
+should copy the template rather than this file.
+
 Upgrading: rename `gdzig-imports-location` (0.4.0) or `gdzig-imports-last`
 (0.3.0 and earlier) to `gdzig-imports-placement`. The default `position` is
 `bottom`, so placement behavior is unchanged. From 0.2.0, also move
@@ -127,8 +131,14 @@ Requirements:
 ```sh
 mise run setup     # fetch zlint v0.10.0 into vendor/zlint
 zig build          # installs zig-out/bin/gdzig-zlint
-zig build test-rules
+zig build test     # rule tests plus self-lint
+zig build lint     # self-lint only
 ```
+
+`zig build lint` runs the built rules against this repository using the
+checked-in `zlint.json`, and fails on warnings. `zig build test` runs the rule
+tests and the same lint. CI lints tracked Zig files explicitly with
+`git ls-files '*.zig' | gdzig-zlint --stdin --deny-warnings`.
 
 The release binary is built with:
 
@@ -177,8 +187,8 @@ until upstream #433 is fixed. The release binary is the primary distribution.
   patches: one raises ZLint's comptime branch quota for several custom rules,
   and one exports the fix module.
 - ZLint's `ignore` handling has rough edges. The rules skip fragments
-  themselves, and CI should pass tracked files explicitly:
-  `git ls-files '*.zig' | gdzig-zlint --stdin`.
+  themselves, and CI passes tracked files explicitly:
+  `git ls-files '*.zig' | gdzig-zlint --stdin --deny-warnings`.
 - Run `--fix` for the import order, move any misplaced imports by hand, review
   the diff, then turn on `--deny-warnings` in CI. The custom import-order fix
   is conservative; ZLint's built-in fixes need separate review.

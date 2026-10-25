@@ -37,14 +37,20 @@ pub fn build(b: *std.Build) void {
     const install = b.addInstallArtifact(exe, .{ .dest_sub_path = "gdzig-zlint" });
     b.getInstallStep().dependOn(&install.step);
 
+    const lint_run = b.addRunArtifact(exe);
+    lint_run.addArg("--deny-warnings");
+    if (b.args) |args| lint_run.addArgs(args);
+    lint_run.setCwd(b.path("."));
+
     const lint_step = b.step("lint", "Run gdzig-zlint on the current directory");
-    lint_step.dependOn(&zlint.addRunLint(b, zlint_dep).step);
+    lint_step.dependOn(&lint_run.step);
 
     const test_rules_step = b.step("test-rules", "Run custom rule tests");
     test_rules_step.dependOn(zlint.addRunCustomLintRulesTest(b, zlint_dep));
 
-    const test_step = b.step("test", "Run all tests");
+    const test_step = b.step("test", "Run rule tests and lint this repository");
     test_step.dependOn(test_rules_step);
+    test_step.dependOn(&lint_run.step);
 }
 
 fn selfRulePaths(b: *std.Build) []const std.Build.LazyPath {

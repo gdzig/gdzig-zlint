@@ -26,5 +26,8 @@ jobs:
       - name: Build release binary
         run: zig build -Doptimize=ReleaseFast
 
+      - name: Lint tracked Zig files
+        run: git ls-files '*.zig' | ./zig-out/bin/gdzig-zlint --stdin --deny-warnings
+
       - name: Smoke test
         run: ./zig-out/bin/gdzig-zlint --version
