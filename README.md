@@ -20,17 +20,25 @@ All four rules skip generated `*.mixin.zig` and `*.replace.zig` fragments.
 ## Install the binary
 
 The release assets are single executables named
-`gdzig-zlint-<os>-<arch>`. Install one with mise's `http` backend:
+`gdzig-zlint-<os>-<arch>`. Install them with mise's `github` backend:
 
 ```toml
 [tools]
-"http:gdzig-zlint" = {
-  version = "0.1.0",
-  url = "https://github.com/gdzig/gdzig-zlint/releases/download/v{{ version }}/gdzig-zlint-{{ os() }}-{{ arch(x64="x86_64", arm64="aarch64") }}",
-}
+"github:gdzig/gdzig-zlint" = "0.1.0"
 ```
 
-Then run it like ZLint:
+The repository is private, so mise needs a token with `Contents: read` for
+`gdzig/gdzig-zlint`:
+
+```sh
+export MISE_GITHUB_TOKEN="ghp_..."
+mise token github   # confirm mise finds the token
+mise use -g github:gdzig/gdzig-zlint@0.1.0
+```
+
+An existing `GITHUB_TOKEN` or `gh auth login` also works. The asset installs
+as `gdzig-zlint`; mise also verifies the release checksum. Then run it like
+ZLint:
 
 ```sh
 gdzig-zlint --version
