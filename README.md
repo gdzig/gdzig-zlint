@@ -69,7 +69,7 @@ The generated `build_options` module is grouped with std.
   "rules": {
     "gdzig-imports-last": [
       "warn",
-      { "project_packages": ["build_options", "common", "compat", "gdzig"] }
+      { "project_packages": ["common", "compat", "gdzig"] }
     ],
     "gdzig-file-name-case": "warn",
     "gdzig-import-alias-case": "warn",
@@ -95,6 +95,9 @@ Rule options:
 - `gdzig-tests-last`
   - `skip_fragments` (default `true`)
   - `check_testing_namespace` (default `true`)
+
+These are fields on the custom rules, parsed by ZLint from `zlint.json`. They
+are not ZLint built-in settings.
 
 ## Build from source
 
