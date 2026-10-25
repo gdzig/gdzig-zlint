@@ -27,19 +27,13 @@ The release assets are single executables named
 "github:gdzig/gdzig-zlint" = "0.1.0"
 ```
 
-The repository is private, so mise needs a token with `Contents: read` for
-`gdzig/gdzig-zlint`:
-
 ```sh
-export MISE_GITHUB_TOKEN="ghp_..."
-mise token github   # confirm mise finds the token
 mise use -g github:gdzig/gdzig-zlint@0.1.0
 ```
 
-An existing `GITHUB_TOKEN` or `gh auth login` also works. The asset installs
-as `gdzig-zlint`; mise also verifies the release checksum. Pin a version: a
-brand-new release can be hidden from `latest` by mise's `minimum_release_age`
-cooldown until it ages. Then run it like ZLint:
+The asset installs as `gdzig-zlint`; mise also verifies the release checksum.
+Pin a version: a brand-new release can be hidden from `latest` by mise's
+`minimum_release_age` cooldown until it ages. Then run it like ZLint:
 
 ```sh
 gdzig-zlint --version
