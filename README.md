@@ -10,7 +10,7 @@ pinned ZLint release plus the rules in `rules/`.
 
 | Rule | Checks |
 | --- | --- |
-| `gdzig-imports-last` | Imports and import-derived aliases are at the bottom, grouped std, third-party, project, with blank lines between groups |
+| `gdzig-imports-last` | Imports and import-derived aliases are at the bottom, ordered std, package, file, with root groups alphabetical and separated by blank lines; safe autofix available |
 | `gdzig-file-name-case` | A file with top-level container fields is a type and uses TitleCase; otherwise it is a namespace and uses snake_case |
 | `gdzig-import-alias-case` | An import alias matches the imported file's name, or the selected member of a namespace file |
 | `gdzig-tests-last` | Tests are at file scope, grouped after production declarations and before the final imports; `testing` sits directly above the first test |
@@ -24,11 +24,11 @@ The release assets are single executables named
 
 ```toml
 [tools]
-"github:gdzig/gdzig-zlint" = "0.1.0"
+"github:gdzig/gdzig-zlint" = "0.2.0"
 ```
 
 ```sh
-mise use -g github:gdzig/gdzig-zlint@0.1.0
+mise use -g github:gdzig/gdzig-zlint@0.2.0
 ```
 
 The asset installs as `gdzig-zlint`; mise also verifies the release checksum.
@@ -53,15 +53,17 @@ Pre-commit:
       # Add --deny-warnings after the existing violations are cleaned up.
 ```
 
-Do not add `--fix` initially. ZLint 0.10.0 can apply dangerous built-in fixes
-with plain `--fix`, and the custom rules are diagnostics-only.
+`gdzig-imports-last` has a safe autofix. The other custom rules are
+diagnostics-only. ZLint 0.10.0 can also apply dangerous built-in fixes with
+plain `--fix`, so review the diff before enabling it in pre-commit. The import
+fix skips blocks containing comments or interleaved declarations.
 
 ## Configure a repository
 
-Copy `zlint.template.json` to the repository as `zlint.json` and adjust the
-project package list. `common`, `compat`, and `gdzig` are project packages in
-the gdzig repository; everything else with a bare package name is third-party.
-The generated `build_options` module is grouped with std.
+Copy `zlint.template.json` to the repository as `zlint.json`. The import order
+is std, then bare package names, then file imports. Root groups are sorted
+alphabetically inside each section and separated by a blank line.
+`build_options` is a package import unless it is added to `std_modules`.
 
 ```json
 {
@@ -69,7 +71,7 @@ The generated `build_options` module is grouped with std.
   "rules": {
     "gdzig-imports-last": [
       "warn",
-      { "project_packages": ["common", "compat", "gdzig"] }
+      { "std_modules": ["std", "builtin"] }
     ],
     "gdzig-file-name-case": "warn",
     "gdzig-import-alias-case": "warn",
@@ -85,9 +87,7 @@ Rule options:
 
 - `gdzig-imports-last`
   - `skip_fragments` (default `true`)
-  - `check_group_order` (default `true`)
-  - `check_blank_lines` (default `true`)
-  - `project_packages` (default `[]`; `build_options` is always std)
+  - `std_modules` (default `["std", "builtin"]`; order sets priority inside the std section)
 - `gdzig-file-name-case`
   - `skip_fragments` (default `true`)
 - `gdzig-import-alias-case`
@@ -115,7 +115,7 @@ zig build test-rules
 The release binary is built with:
 
 ```sh
-zig build -Doptimize=ReleaseFast -Dversion=0.1.0
+zig build -Doptimize=ReleaseFast -Dversion=0.2.0
 ```
 
 `zig build -Doptimize=ReleaseFast` is the default `install` step. The binary is
@@ -148,21 +148,25 @@ until upstream #433 is fixed. The release binary is the primary distribution.
   helper module: the same file would belong to more than one module. The
   import helpers are therefore duplicated in the rule files. This is a ZLint
   0.10.0 limitation.
-- Custom rules have no documented autofix API. Every rule is diagnostics-only.
+- Custom rule fixes use ZLint's fix API. The vendored patch exposes
+  `zlint.linter.fix` to custom rules; without it, ZLint 0.10.0 keeps the fix
+  types private. `gdzig-imports-last` is safe-fixable. It rewrites a contiguous
+  bottom import block and skips blocks containing comments or interleaved
+  declarations. The other rules remain diagnostics-only.
 - The vendored ZLint source is pinned to v0.10.0 commit
-  `3ef67af7dfed776cb03012563942cdf3a97f1b59`. `patches/` contains the small
-  patch that raises ZLint's comptime branch quota; without it, the rule
-  configuration struct exceeds the default quota when several custom rules are
-  registered.
+  `3ef67af7dfed776cb03012563942cdf3a97f1b59`. `patches/` contains two small
+  patches: one raises ZLint's comptime branch quota for several custom rules,
+  and one exports the fix module.
 - ZLint's `ignore` handling has rough edges. The rules skip fragments
   themselves, and CI should pass tracked files explicitly:
   `git ls-files '*.zig' | gdzig-zlint --stdin`.
-- The rule set is deliberately diagnostics-first. Fix the repository or adjust
-  the rule before turning on `--deny-warnings` in CI.
+- Run `--fix` for the import block, review the diff, then turn on
+  `--deny-warnings` in CI. The custom import fix is conservative; ZLint's
+  built-in fixes need separate review.
 
 ## Release process
 
-Push a tag such as `v0.1.0`. `.github/workflows/release.yml` builds
+Push a tag such as `v0.2.0`. `.github/workflows/release.yml` builds
 `gdzig-zlint` for macOS and Linux, publishes checksums, and attaches the
 binaries to the GitHub release.
 

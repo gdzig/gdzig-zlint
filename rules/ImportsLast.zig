@@ -1,17 +1,18 @@
 //! ## What This Rule Does
-//! Enforces gdzig's import placement and grouping.
+//! Enforces gdzig's import placement and ordering.
 //!
-//! Imports and aliases derived from imports go at the bottom of the file,
-//! after all other declarations. They are grouped in this order, with a blank
-//! line between groups:
+//! Imports and aliases derived from imports go at the bottom of the file.
+//! Within the import block, keep three sections in this order:
 //!
-//! 1. Zig standard library
-//! 2. Third-party packages
-//! 3. Project files and packages
+//! 1. Zig standard library imports (`std`, `builtin`, and their aliases).
+//! 2. Package imports: bare names such as `casez`, `common`, or `build_options`.
+//! 3. File imports: relative paths and paths containing `/`.
 //!
-//! Packages in `project_packages` are treated as project imports. Relative
-//! paths and paths ending in `.zig` are always project imports. The generated
-//! `build_options` module is grouped with std.
+//! Sort root groups alphabetically inside each section. A root group is one
+//! root import plus the aliases derived from it. Separate root groups with a
+//! blank line.
+//!
+//! `build_options` is a package import unless it is added to `std_modules`.
 //!
 //! Generated `*.mixin.zig` and `*.replace.zig` fragments are skipped.
 
@@ -19,80 +20,79 @@ pub const meta: Rule.Meta = .{
     .name = "gdzig-imports-last",
     .category = .style,
     .default = .warning,
+    .fix = .safe_fix,
 };
 
 /// Skip generated mixin and replace fragments.
 skip_fragments: bool = true,
 
-/// Require the std, third-party, project group order.
-check_group_order: bool = true,
-
-/// Require a blank line between import groups.
-check_blank_lines: bool = true,
-
-/// Package names that are part of this project rather than third-party.
-project_packages: []const []const u8 = &.{},
+/// Paths that belong in the std section.
+std_modules: []const []const u8 = &.{ "std", "builtin" },
 
 const ImportsLast = @This();
 
 pub fn runOnce(self: *const ImportsLast, ctx: *LinterContext) void {
     if (self.skip_fragments and helpers.isFragment(ctx.source.pathname)) return;
 
-    var collected = helpers.collectImports(ctx, self.project_packages);
+    const ast = ctx.ast();
+    const roots = ast.rootDecls();
+
+    var collected = helpers.collect(ctx, self.std_modules);
     defer collected.deinit();
-    if (collected.imports.items.len == 0) return;
+    if (collected.entries.items.len == 0) return;
 
-    const roots = ctx.ast().rootDecls();
+    std.mem.sort(helpers.Entry, collected.entries.items, {}, helpers.lessThanDecl);
 
-    var last_non_import: ?usize = null;
-    for (roots, 0..) |decl, i| {
-        if (!helpers.isImportDecl(collected.imports.items, decl)) last_non_import = i;
+    const sorted = ctx.gpa.dupe(helpers.Entry, collected.entries.items) catch @panic("OOM");
+    defer ctx.gpa.free(sorted);
+    std.mem.sort(helpers.Entry, sorted, {}, helpers.lessThanEntry);
+
+    const imports_last = helpers.importsAreLast(roots, collected.entries.items);
+    const order_ok = helpers.sameDeclOrder(collected.entries.items, sorted);
+    const missing_blank = helpers.firstMissingBlank(ctx, collected.entries.items);
+
+    if (imports_last and order_ok and missing_blank == null) return;
+
+    if (!imports_last) {
+        const bad = helpers.firstImportBeforeDecl(roots, collected.entries.items) orelse 0;
+        const last = helpers.lastNonImport(roots, collected.entries.items) orelse 0;
+        ctx.report(ctx.diagnostic(
+            "imports and import-derived aliases must be placed after all other declarations",
+            .{ ctx.spanN(collected.entries.items[bad].decl), ctx.spanN(roots[last]) },
+        ));
+        return;
     }
 
-    if (last_non_import) |last| {
-        for (collected.imports.items) |imp| {
-            const index = std.mem.indexOfScalar(Node.Index, roots, imp.decl) orelse continue;
-            if (index < last) {
-                ctx.report(ctx.diagnostic(
-                    "imports and import-derived aliases must be placed after all other declarations",
-                    .{ ctx.spanN(imp.decl), ctx.spanN(roots[last]) },
-                ));
-                break;
-            }
+    var replacement: std.ArrayListUnmanaged(u8) = .empty;
+    defer replacement.deinit(ctx.gpa);
+    const fix: ?helpers.ReorderFix = if (helpers.canFix(ctx, collected.entries.items))
+        helpers.buildFix(ctx, collected.entries.items, sorted, &replacement)
+    else
+        null;
+
+    if (!order_ok) {
+        const bad = helpers.firstOrderMismatch(collected.entries.items, sorted);
+        const diagnostic = ctx.diagnostic(
+            "import root groups must be ordered std, package, file, then alphabetically",
+            .{ctx.spanN(collected.entries.items[bad].decl)},
+        );
+        if (fix) |f| {
+            ctx.reportWithFix(f, diagnostic, &helpers.applyReorder);
+        } else {
+            ctx.report(diagnostic);
         }
+        return;
     }
 
-    if (self.check_group_order) {
-        var previous: ?helpers.Group = null;
-        for (collected.imports.items) |imp| {
-            if (previous) |prev| {
-                if (@intFromEnum(imp.group) < @intFromEnum(prev)) {
-                    ctx.report(ctx.diagnosticf(
-                        "import group '{s}' must come before '{s}'",
-                        .{ helpers.groupName(imp.group), helpers.groupName(prev) },
-                        .{ctx.spanN(imp.decl)},
-                    ));
-                }
-            }
-            previous = imp.group;
-        }
-    }
-
-    if (self.check_blank_lines) {
-        var i: usize = 1;
-        while (i < collected.imports.items.len) : (i += 1) {
-            const prev = collected.imports.items[i - 1];
-            const curr = collected.imports.items[i];
-            if (prev.group == curr.group) continue;
-
-            const prev_end = ctx.semantic.nodeSpan(prev.decl).end;
-            const curr_start = ctx.semantic.nodeSpan(curr.decl).start;
-            if (helpers.newlineCount(ctx.source.text(), prev_end, curr_start) < 2) {
-                ctx.report(ctx.diagnostic(
-                    "separate import groups with a blank line",
-                    .{ctx.spanN(curr.decl)},
-                ));
-            }
+    if (missing_blank) |bad| {
+        const diagnostic = ctx.diagnostic(
+            "separate import root groups with a blank line",
+            .{ ctx.spanN(collected.entries.items[bad].decl), ctx.spanN(collected.entries.items[bad - 1].decl) },
+        );
+        if (fix) |f| {
+            ctx.reportWithFix(f, diagnostic, &helpers.applyReorder);
+        } else {
+            ctx.report(diagnostic);
         }
     }
 }
@@ -102,49 +102,84 @@ pub fn rule(self: *ImportsLast) Rule {
 }
 
 const helpers = struct {
-    const Group = enum(u8) {
+    const Section = enum(u8) {
         std = 0,
-        third_party = 1,
-        project = 2,
+        package = 1,
+        file = 2,
     };
 
-    const Import = struct {
+    const Entry = struct {
         decl: Node.Index,
-        group: Group,
+        section: Section,
+        module_name: []const u8,
+        std_rank: usize,
+        is_derived: bool,
     };
 
-    const NameGroup = struct {
+    const RootInfo = struct {
+        section: Section,
+        module_name: []const u8,
+        std_rank: usize,
+    };
+
+    const NameInfo = struct {
         name: []const u8,
-        group: Group,
-    };
-
-    const ImportInfo = struct {
-        path: []const u8,
-        member: ?[]const u8,
+        root: RootInfo,
     };
 
     const Collected = struct {
-        imports: std.ArrayListUnmanaged(Import) = .empty,
-        names: std.ArrayListUnmanaged(NameGroup) = .empty,
+        entries: std.ArrayListUnmanaged(Entry) = .empty,
+        names: std.ArrayListUnmanaged(NameInfo) = .empty,
         gpa: std.mem.Allocator,
 
         fn deinit(self: *Collected) void {
-            self.imports.deinit(self.gpa);
+            self.entries.deinit(self.gpa);
             self.names.deinit(self.gpa);
         }
     };
 
-    fn groupName(group: Group) []const u8 {
-        return switch (group) {
-            .std => "std",
-            .third_party => "third-party",
-            .project => "project",
-        };
-    }
+    const ReorderFix = struct {
+        span: Span,
+        replacement: []const u8,
+    };
 
     fn isFragment(path: ?[]const u8) bool {
         const p = path orelse return false;
         return std.mem.endsWith(u8, p, ".mixin.zig") or std.mem.endsWith(u8, p, ".replace.zig");
+    }
+
+    fn isFilePath(path: []const u8) bool {
+        if (path.len == 0) return false;
+        if (path[0] == '.') return true;
+        if (std.mem.endsWith(u8, path, ".zig")) return true;
+        return std.mem.indexOfScalar(u8, path, '/') != null;
+    }
+
+    fn sectionOf(path: []const u8, std_modules: []const []const u8) Section {
+        for (std_modules) |module| {
+            if (std.mem.eql(u8, path, module)) return .std;
+        }
+        if (isFilePath(path)) return .file;
+        return .package;
+    }
+
+    fn stdRank(module_name: []const u8, std_modules: []const []const u8) ?usize {
+        for (std_modules, 0..) |module, i| {
+            if (std.mem.eql(u8, module_name, module)) return i;
+        }
+        return null;
+    }
+
+    fn moduleName(path: []const u8) []const u8 {
+        var p = path;
+        while (std.mem.startsWith(u8, p, "../")) p = p[3..];
+        if (std.mem.startsWith(u8, p, "./")) p = p[2..];
+        if (isFilePath(path)) {
+            if (std.mem.lastIndexOfScalar(u8, p, '.')) |dot| {
+                if (dot > 0) p = p[0..dot];
+            }
+        }
+        return p;
     }
 
     fn declName(ast: *const Ast, decl: Node.Index) ?[]const u8 {
@@ -186,91 +221,149 @@ const helpers = struct {
         return importInfoFromExpr(ast, init);
     }
 
-    fn classify(path: []const u8, project_packages: []const []const u8) Group {
-        if (std.mem.eql(u8, path, "std") or
-            std.mem.eql(u8, path, "builtin") or
-            std.mem.eql(u8, path, "build_options"))
-        {
-            return .std;
-        }
-        if (path.len > 0 and path[0] == '.') return .project;
-        if (std.mem.endsWith(u8, path, ".zig")) return .project;
-        if (std.mem.indexOfScalar(u8, path, '/') != null) return .project;
-        for (project_packages) |pkg| {
-            if (std.mem.eql(u8, path, pkg)) return .project;
-        }
-        return .third_party;
-    }
-
-    fn importGroupFromExpr(
+    fn rootFromExpr(
         ast: *const Ast,
         node: Node.Index,
-        names: []const NameGroup,
-        project_packages: []const []const u8,
-    ) ?Group {
+        names: []const NameInfo,
+        std_modules: []const []const u8,
+    ) ?RootInfo {
         switch (ast.nodeTag(node)) {
             .identifier => {
                 const name = ast.tokenSlice(ast.nodeMainToken(node));
-                for (names) |name_group| {
-                    if (std.mem.eql(u8, name_group.name, name)) return name_group.group;
+                for (names) |info| {
+                    if (std.mem.eql(u8, info.name, name)) return info.root;
                 }
                 return null;
             },
-            .field_access => {
-                return importGroupFromExpr(ast, ast.nodeData(node).node_and_token[0], names, project_packages);
-            },
-            .address_of, .deref => {
-                return importGroupFromExpr(ast, ast.nodeData(node).node, names, project_packages);
-            },
-            .unwrap_optional => {
-                return importGroupFromExpr(ast, ast.nodeData(node).node_and_token[0], names, project_packages);
-            },
+            .field_access => return rootFromExpr(ast, ast.nodeData(node).node_and_token[0], names, std_modules),
+            .address_of, .deref => return rootFromExpr(ast, ast.nodeData(node).node, names, std_modules),
+            .unwrap_optional => return rootFromExpr(ast, ast.nodeData(node).node_and_token[0], names, std_modules),
             .builtin_call_two, .builtin_call_two_comma, .builtin_call, .builtin_call_comma => {
-                if (importPathFromCall(ast, node)) |path| return classify(path, project_packages);
-                return null;
+                const path = importPathFromCall(ast, node) orelse return null;
+                const module_name = moduleName(path);
+                const section = sectionOf(path, std_modules);
+                return .{
+                    .section = section,
+                    .module_name = module_name,
+                    .std_rank = if (section == .std) (stdRank(module_name, std_modules) orelse 0) else 0,
+                };
             },
             else => return null,
         }
     }
 
-    fn collectImports(ctx: *LinterContext, project_packages: []const []const u8) Collected {
+    fn collect(ctx: *LinterContext, std_modules: []const []const u8) Collected {
         const ast = ctx.ast();
         var result = Collected{ .gpa = ctx.gpa };
 
         for (ast.rootDecls()) |decl| {
             const info = importInfoFromDecl(ast, decl) orelse continue;
             const name = declName(ast, decl) orelse continue;
-            const group = classify(info.path, project_packages);
-            result.imports.append(ctx.gpa, .{ .decl = decl, .group = group }) catch @panic("OOM");
-            result.names.append(ctx.gpa, .{ .name = name, .group = group }) catch @panic("OOM");
+            const section = sectionOf(info.path, std_modules);
+            const module_name = moduleName(info.path);
+            const root = RootInfo{
+                .section = section,
+                .module_name = module_name,
+                .std_rank = if (section == .std) (stdRank(module_name, std_modules) orelse 0) else 0,
+            };
+
+            result.entries.append(ctx.gpa, .{
+                .decl = decl,
+                .section = section,
+                .module_name = module_name,
+                .std_rank = root.std_rank,
+                .is_derived = info.member != null,
+            }) catch @panic("OOM");
+            result.names.append(ctx.gpa, .{ .name = name, .root = root }) catch @panic("OOM");
         }
 
         var changed = true;
         while (changed) {
             changed = false;
             for (ast.rootDecls()) |decl| {
-                if (isImportDecl(result.imports.items, decl)) continue;
+                if (isEntryDecl(result.entries.items, decl)) continue;
 
                 const var_decl = ast.fullVarDecl(decl) orelse continue;
                 const init = var_decl.ast.init_node.unwrap() orelse continue;
-                const group = importGroupFromExpr(ast, init, result.names.items, project_packages) orelse continue;
+                const root = rootFromExpr(ast, init, result.names.items, std_modules) orelse continue;
                 const name = declName(ast, decl) orelse continue;
 
-                result.imports.append(ctx.gpa, .{ .decl = decl, .group = group }) catch @panic("OOM");
-                result.names.append(ctx.gpa, .{ .name = name, .group = group }) catch @panic("OOM");
+                result.entries.append(ctx.gpa, .{
+                    .decl = decl,
+                    .section = root.section,
+                    .module_name = root.module_name,
+                    .std_rank = root.std_rank,
+                    .is_derived = true,
+                }) catch @panic("OOM");
+                result.names.append(ctx.gpa, .{ .name = name, .root = root }) catch @panic("OOM");
                 changed = true;
             }
         }
 
-        std.mem.sort(Import, result.imports.items, {}, lessThanImport);
         return result;
     }
 
-    fn isImportDecl(imports: []const Import, decl: Node.Index) bool {
-        for (imports) |imp| {
-            if (imp.decl == decl) return true;
+    fn isEntryDecl(entries: []const Entry, decl: Node.Index) bool {
+        for (entries) |entry| {
+            if (entry.decl == decl) return true;
         }
         return false;
+    }
+
+    fn lessThanDecl(_: void, a: Entry, b: Entry) bool {
+        return @intFromEnum(a.decl) < @intFromEnum(b.decl);
+    }
+
+    fn compareCaseInsensitive(a: []const u8, b: []const u8) std.math.Order {
+        const len = @min(a.len, b.len);
+        var i: usize = 0;
+        while (i < len) : (i += 1) {
+            const ca = std.ascii.toLower(a[i]);
+            const cb = std.ascii.toLower(b[i]);
+            if (ca < cb) return .lt;
+            if (ca > cb) return .gt;
+        }
+        if (a.len < b.len) return .lt;
+        if (a.len > b.len) return .gt;
+        return .eq;
+    }
+
+    fn lessThanEntry(_: void, a: Entry, b: Entry) bool {
+        if (@intFromEnum(a.section) != @intFromEnum(b.section)) {
+            return @intFromEnum(a.section) < @intFromEnum(b.section);
+        }
+        if (a.section == .std and a.std_rank != b.std_rank) {
+            return a.std_rank < b.std_rank;
+        }
+        switch (compareCaseInsensitive(a.module_name, b.module_name)) {
+            .lt => return true,
+            .gt => return false,
+            .eq => {},
+        }
+        if (a.is_derived != b.is_derived) return !a.is_derived;
+        return @intFromEnum(a.decl) < @intFromEnum(b.decl);
+    }
+
+    fn sameGroup(a: Entry, b: Entry) bool {
+        if (a.section == .std and b.section == .std) return true;
+        return a.section == b.section and std.mem.eql(u8, a.module_name, b.module_name);
+    }
+
+    fn sameDeclOrder(a: []const Entry, b: []const Entry) bool {
+        if (a.len != b.len) return false;
+        for (a, b) |x, y| {
+            if (x.decl != y.decl) return false;
+        }
+        return true;
+    }
+
+    fn firstOrderMismatch(a: []const Entry, b: []const Entry) usize {
+        const len = @min(a.len, b.len);
+        var i: usize = 0;
+        while (i < len) : (i += 1) {
+            if (a[i].decl != b[i].decl) return i;
+        }
+        return if (a.len < b.len) a.len else 0;
     }
 
     fn newlineCount(source: []const u8, from: u32, to: u32) usize {
@@ -281,9 +374,109 @@ const helpers = struct {
         return count;
     }
 
-    fn lessThanImport(_: void, a: Import, b: Import) bool {
-        return @intFromEnum(a.decl) < @intFromEnum(b.decl);
+    fn firstMissingBlank(ctx: *LinterContext, entries: []const Entry) ?usize {
+        if (entries.len < 2) return null;
+        var i: usize = 1;
+        while (i < entries.len) : (i += 1) {
+            const prev = entries[i - 1];
+            const curr = entries[i];
+            if (sameGroup(prev, curr)) continue;
+
+            const prev_end = ctx.semantic.nodeSpan(prev.decl).end;
+            const curr_start = ctx.semantic.nodeSpan(curr.decl).start;
+            if (newlineCount(ctx.source.text(), prev_end, curr_start) < 2) return i;
+        }
+        return null;
     }
+
+    fn importsAreLast(roots: []const Node.Index, entries: []const Entry) bool {
+        const last = lastNonImport(roots, entries) orelse return true;
+        for (entries) |entry| {
+            const index = std.mem.indexOfScalar(Node.Index, roots, entry.decl) orelse continue;
+            if (index < last) return false;
+        }
+        return true;
+    }
+
+    fn lastNonImport(roots: []const Node.Index, entries: []const Entry) ?usize {
+        var last: ?usize = null;
+        for (roots, 0..) |decl, i| {
+            if (!isEntryDecl(entries, decl)) last = i;
+        }
+        return last;
+    }
+
+    fn firstImportBeforeDecl(roots: []const Node.Index, entries: []const Entry) ?usize {
+        const last = lastNonImport(roots, entries) orelse return null;
+        for (entries, 0..) |entry, i| {
+            const index = std.mem.indexOfScalar(Node.Index, roots, entry.decl) orelse continue;
+            if (index < last) return i;
+        }
+        return null;
+    }
+
+    fn declSpan(ctx: *LinterContext, decl: Node.Index) Span {
+        var span = ctx.semantic.nodeSpan(decl);
+        const ast = ctx.ast();
+        const next = ast.lastToken(decl) + 1;
+        const tokens = ctx.tokens();
+        if (next < tokens.len and tokens.items(.tag)[next] == .semicolon) {
+            span.end = ctx.semantic.tokenSpan(next).end;
+        }
+        return span;
+    }
+
+    fn canFix(ctx: *LinterContext, entries: []const Entry) bool {
+        if (entries.len < 2) return false;
+        const span = Span.new(
+            ctx.semantic.nodeSpan(entries[0].decl).start,
+            declSpan(ctx, entries[entries.len - 1].decl).end,
+        );
+        const block = span.snippet(ctx.source.text());
+        if (std.mem.indexOf(u8, block, "//") != null) return false;
+        if (std.mem.indexOf(u8, block, "/*") != null) return false;
+        return true;
+    }
+
+    fn buildFix(
+        ctx: *LinterContext,
+        source_entries: []const Entry,
+        sorted: []const Entry,
+        buffer: *std.ArrayListUnmanaged(u8),
+    ) ?ReorderFix {
+        if (source_entries.len == 0 or sorted.len == 0) return null;
+
+        const span = Span.new(
+            ctx.semantic.nodeSpan(source_entries[0].decl).start,
+            declSpan(ctx, source_entries[source_entries.len - 1].decl).end,
+        );
+
+        for (sorted, 0..) |entry, i| {
+            if (i != 0) {
+                if (sameGroup(sorted[i - 1], entry)) {
+                    buffer.append(ctx.gpa, '\n') catch @panic("OOM");
+                } else {
+                    buffer.appendSlice(ctx.gpa, "\n\n") catch @panic("OOM");
+                }
+            }
+            const snippet = ctx.semantic.nodeSpan(entry.decl).snippet(ctx.source.text());
+            buffer.appendSlice(ctx.gpa, snippet) catch @panic("OOM");
+            if (!std.mem.endsWith(u8, snippet, ";")) {
+                buffer.append(ctx.gpa, ';') catch @panic("OOM");
+            }
+        }
+
+        return .{ .span = span, .replacement = buffer.items };
+    }
+
+    fn applyReorder(fix: ReorderFix, builder: Fix.Builder) anyerror!Fix {
+        return builder.replacef(fix.span, "{s}", .{fix.replacement});
+    }
+
+    const ImportInfo = struct {
+        path: []const u8,
+        member: ?[]const u8,
+    };
 };
 
 test ImportsLast {
@@ -294,84 +487,95 @@ test ImportsLast {
         \\pub fn foo() void {}
         \\
         \\const std = @import("std");
-        \\const Writer = std.Io.Writer;
+        \\const Allocator = std.mem.Allocator;
+        \\
+        \\const build_options = @import("build_options");
         \\
         \\const casez = @import("casez");
         \\
-        \\const Config = @import("Config.zig");
+        \\const common = @import("common");
+        \\const gdzig_case = common.gdzig_case;
+        \\const GodotApi = @import("common").GodotApi;
+        \\
+        \\const Context = @import("../Context.zig");
+        \\const Builtin = Context.Builtin;
+        \\const Type = Context.Type;
+        \\
+        \\const docs = @import("docs.zig");
+        \\
+        \\const Value = @import("value.zig").Value;
     ;
     const passing_alias_chain =
         \\const Thing = @This();
-        \\
-        \\pub fn foo() void {}
         \\
         \\const std = @import("std");
         \\const Io = std.Io;
         \\const Writer = Io.Writer;
         \\
-        \\const Config = @import("Config.zig");
-    ;
-    const passing_import_member =
-        \\const Thing = @This();
-        \\
-        \\pub fn foo() void {}
-        \\
-        \\const std = @import("std");
-        \\
-        \\const GodotApi = @import("common").GodotApi;
-        \\const Version = @import("common").Version;
-    ;
-    const passing_build_options =
-        \\const Thing = @This();
-        \\
-        \\pub fn foo() void {}
-        \\
-        \\const std = @import("std");
-        \\const build_options = @import("build_options");
-        \\
-        \\const Config = @import("Config.zig");
+        \\const casez = @import("casez");
     ;
     const passing_unary_alias =
         \\const Thing = @This();
         \\
-        \\pub fn foo() void {}
-        \\
         \\const gdzig = @import("gdzig");
         \\const raw = &gdzig.raw;
     ;
-    const project_packages_source =
+    const package_before_std =
         \\const Thing = @This();
-        \\
-        \\pub fn foo() void {}
-        \\
-        \\const std = @import("std");
         \\
         \\const casez = @import("casez");
         \\
+        \\const std = @import("std");
+    ;
+    const file_before_package =
+        \\const Thing = @This();
+        \\
+        \\const Context = @import("../Context.zig");
+        \\
+        \\const casez = @import("casez");
+    ;
+    const wrong_alphabetical =
+        \\const Thing = @This();
+        \\
+        \\const casez = @import("casez");
+        \\
+        \\const build_options = @import("build_options");
+    ;
+    const missing_blank_line =
+        \\const Thing = @This();
+        \\
+        \\const std = @import("std");
+        \\const casez = @import("casez");
+    ;
+    const split_alias =
+        \\const Thing = @This();
+        \\
         \\const common = @import("common");
-        \\const Config = @import("Config.zig");
+        \\
+        \\const casez = @import("casez");
+        \\
+        \\const gdzig_case = common.gdzig_case;
     ;
     const import_before_declaration =
         \\const std = @import("std");
         \\
         \\pub fn foo() void {}
     ;
-    const wrong_group_order =
+    const fix_source =
         \\const Thing = @This();
         \\
-        \\pub fn foo() void {}
-        \\
-        \\const Config = @import("Config.zig");
-        \\
+        \\const casez = @import("casez");
         \\const std = @import("std");
+        \\const Context = @import("../Context.zig");
     ;
-    const missing_blank_line =
+    const fix_expected =
         \\const Thing = @This();
         \\
-        \\pub fn foo() void {}
-        \\
         \\const std = @import("std");
-        \\const Config = @import("Config.zig");
+        \\
+        \\const casez = @import("casez");
+        \\
+        \\const Context = @import("../Context.zig");
     ;
 
     var implementation = ImportsLast{};
@@ -379,27 +583,43 @@ test ImportsLast {
     defer runner.deinit();
     runner.setFileName("Test.zig");
     try runner
-        .withPass(&.{
-            passing,
-            passing_alias_chain,
-            passing_import_member,
-            passing_build_options,
-            passing_unary_alias,
+        .withPass(&.{ passing, passing_alias_chain, passing_unary_alias })
+        .withFail(&.{
+            package_before_std,
+            file_before_package,
+            wrong_alphabetical,
+            missing_blank_line,
+            split_alias,
+            import_before_declaration,
         })
-        .withFail(&.{ import_before_declaration, wrong_group_order, missing_blank_line, project_packages_source })
+        .withFix(&.{.{ .src = fix_source, .expected = fix_expected }})
         .run();
 
-    var project_impl = ImportsLast{ .project_packages = &.{"common"} };
-    var project_runner = RuleTester.init(testing.allocator, project_impl.rule());
-    defer project_runner.deinit();
-    project_runner.setFileName("Test.zig");
-    try project_runner.withPass(&.{project_packages_source}).run();
+    const build_options_with_std =
+        \\const Thing = @This();
+        \\
+        \\const std = @import("std");
+        \\const build_options = @import("build_options");
+        \\
+        \\const casez = @import("casez");
+    ;
+    var with_std_impl = ImportsLast{ .std_modules = &.{ "std", "builtin", "build_options" } };
+    var with_std_runner = RuleTester.init(testing.allocator, with_std_impl.rule());
+    defer with_std_runner.deinit();
+    with_std_runner.setFileName("Test.zig");
+    try with_std_runner.withPass(&.{build_options_with_std}).run();
+
+    var default_impl = ImportsLast{};
+    var default_runner = RuleTester.init(testing.allocator, default_impl.rule());
+    defer default_runner.deinit();
+    default_runner.setFileName("Test.zig");
+    try default_runner.withFail(&.{build_options_with_std}).run();
 
     var fragment_impl = ImportsLast{};
     var fragment_runner = RuleTester.init(testing.allocator, fragment_impl.rule());
     defer fragment_runner.deinit();
     fragment_runner.setFileName("Aabb.mixin.zig");
-    try fragment_runner.withPass(&.{import_before_declaration}).run();
+    try fragment_runner.withPass(&.{package_before_std}).run();
 }
 
 const std = @import("std");
@@ -411,3 +631,5 @@ const Node = Ast.Node;
 const Rule = zlint.linter.rule.Rule;
 const RuleTester = zlint.linter.tester;
 const LinterContext = zlint.linter.lint_context;
+const Span = zlint.linter.span.Span;
+const Fix = zlint.linter.fix.Fix;

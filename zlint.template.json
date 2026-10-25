@@ -11,10 +11,9 @@
     "gdzig-imports-last": [
       "warn",
       {
-        "project_packages": [
-          "common",
-          "compat",
-          "gdzig"
+        "std_modules": [
+          "std",
+          "builtin"
         ]
       }
     ],

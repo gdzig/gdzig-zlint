@@ -1,0 +1,12 @@
+diff --git a/src/root.zig b/src/root.zig
+index 585e6d0..4b1690c 100644
+--- a/src/root.zig
++++ b/src/root.zig
+@@ -22,6 +22,7 @@ pub const linter = struct {
+     pub const ast_utils = @import("linter/ast_utils.zig");
+     pub const lint_context = @import("linter/lint_context.zig");
+     pub const tester = @import("linter/tester.zig");
++    pub const fix = @import("linter/fix.zig");
+ };
+ 
+ /// Internal. Exported for codegen.
