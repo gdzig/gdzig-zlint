@@ -82,31 +82,20 @@ const helpers = struct {
     }
 
     fn isTitleCase(name: []const u8) bool {
-        var saw_alpha = false;
-        for (name) |c| {
-            if (std.ascii.isAlphabetic(c)) {
-                if (!saw_alpha) {
-                    if (!std.ascii.isUpper(c)) return false;
-                    saw_alpha = true;
-                }
-            } else if (!std.ascii.isDigit(c)) {
-                return false;
-            }
+        if (name.len == 0 or !std.ascii.isUpper(name[0])) return false;
+        for (name[1..]) |c| {
+            if (!std.ascii.isAlphanumeric(c)) return false;
         }
-        return saw_alpha;
+        return true;
     }
 
     fn isSnakeCase(name: []const u8) bool {
-        var saw_alpha = false;
-        for (name) |c| {
-            if (std.ascii.isAlphabetic(c)) {
-                if (std.ascii.isUpper(c)) return false;
-                saw_alpha = true;
-            } else if (!std.ascii.isDigit(c) and c != '_') {
-                return false;
-            }
+        if (name.len == 0) return false;
+        if (!std.ascii.isLower(name[0]) and name[0] != '_') return false;
+        for (name[1..]) |c| {
+            if (!std.ascii.isLower(c) and !std.ascii.isDigit(c) and c != '_') return false;
         }
-        return saw_alpha;
+        return true;
     }
 };
 
@@ -140,6 +129,18 @@ test FileNameCase {
     defer fragment_runner.deinit();
     fragment_runner.setFileName("Aabb.mixin.zig");
     try fragment_runner.withPass(&.{type_source}).run();
+
+    var leading_digit_type = FileNameCase{};
+    var leading_digit_type_runner = RuleTester.init(testing.allocator, leading_digit_type.rule());
+    defer leading_digit_type_runner.deinit();
+    leading_digit_type_runner.setFileName("123Thing.zig");
+    try leading_digit_type_runner.withFail(&.{type_source}).run();
+
+    var leading_digit_namespace = FileNameCase{};
+    var leading_digit_namespace_runner = RuleTester.init(testing.allocator, leading_digit_namespace.rule());
+    defer leading_digit_namespace_runner.deinit();
+    leading_digit_namespace_runner.setFileName("123thing.zig");
+    try leading_digit_namespace_runner.withFail(&.{namespace_source}).run();
 }
 
 const std = @import("std");

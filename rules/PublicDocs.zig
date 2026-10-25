@@ -1,8 +1,9 @@
 //! ## What This Rule Does
-//! Requires a `///` doc comment on public functions.
+//! Requires a `///` doc comment on public functions, including extern
+//! declarations.
 //!
-//! A doc comment should describe the function's purpose, its inputs, and any
-//! significant return or error behavior.
+//! This checks that a doc comment is present. It does not judge whether the
+//! content describes purpose, inputs, or return and error behavior.
 //!
 //! Hand-written `*.mixin.zig` and `*.replace.zig` fragments are linted. Set
 //! `skip_fragments` to exclude them.
@@ -21,7 +22,15 @@ const PublicDocs = @This();
 /// Checks public functions for a doc comment.
 pub fn runOnNode(self: *const PublicDocs, wrapper: NodeWrapper, ctx: *LinterContext) void {
     if (self.skip_fragments and helpers.isFragment(ctx.source.pathname)) return;
-    if (wrapper.node.tag != .fn_decl) return;
+    switch (wrapper.node.tag) {
+        .fn_decl => {},
+        .fn_proto,
+        .fn_proto_simple,
+        .fn_proto_multi,
+        .fn_proto_one,
+        => if (helpers.isDeclPrototype(ctx, wrapper.idx)) return,
+        else => return,
+    }
 
     const ast = ctx.ast();
     var buffer: [1]Node.Index = undefined;
@@ -49,6 +58,16 @@ const helpers = struct {
         const p = path orelse return false;
         return std.mem.endsWith(u8, p, ".mixin.zig") or std.mem.endsWith(u8, p, ".replace.zig");
     }
+
+    fn isDeclPrototype(ctx: *LinterContext, node: Node.Index) bool {
+        const ast = ctx.ast();
+        for (0..ast.nodes.len) |index| {
+            const candidate: Node.Index = @enumFromInt(index);
+            if (ast.nodeTag(candidate) != .fn_decl) continue;
+            if (ast.nodeData(candidate).node_and_node[0] == node) return true;
+        }
+        return false;
+    }
 };
 
 test PublicDocs {
@@ -70,6 +89,7 @@ test PublicDocs {
         .withFail(&.{
             "pub fn add(a: u32, b: u32) u32 { return a + b; }",
             "pub inline fn add(a: u32, b: u32) u32 { return a + b; }",
+            "pub extern fn add(a: u32, b: u32) u32;",
             "const Thing = struct {\n    pub fn get(self: Thing) u32 { return self.value; }\n    value: u32,\n};",
         })
         .run();

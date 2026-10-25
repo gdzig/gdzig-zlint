@@ -106,6 +106,7 @@ const helpers = struct {
         decl: Node.Index,
         section: Section,
         module_name: []const u8,
+        identity: []const u8,
         std_rank: usize,
         is_derived: bool,
     };
@@ -113,6 +114,7 @@ const helpers = struct {
     const RootInfo = struct {
         section: Section,
         module_name: []const u8,
+        identity: []const u8,
         std_rank: usize,
     };
 
@@ -195,16 +197,17 @@ const helpers = struct {
     }
 
     fn importInfoFromExpr(ast: *const Ast, node: Node.Index) ?ImportInfo {
-        switch (ast.nodeTag(node)) {
+        const expr = unwrapGrouped(ast, node);
+        switch (ast.nodeTag(expr)) {
             .builtin_call_two, .builtin_call_two_comma, .builtin_call, .builtin_call_comma => {
-                const path = importPathFromCall(ast, node) orelse return null;
+                const path = importPathFromCall(ast, expr) orelse return null;
                 return .{
                     .path = path,
                     .member = null,
                 };
             },
             .field_access => {
-                const data = ast.nodeData(node).node_and_token;
+                const data = ast.nodeData(expr).node_and_token;
                 const base = importInfoFromExpr(ast, data[0]) orelse return null;
                 return .{
                     .path = base.path,
@@ -227,24 +230,26 @@ const helpers = struct {
         names: []const NameInfo,
         std_modules: []const []const u8,
     ) ?RootInfo {
-        switch (ast.nodeTag(node)) {
+        const expr = unwrapGrouped(ast, node);
+        switch (ast.nodeTag(expr)) {
             .identifier => {
-                const name = ast.tokenSlice(ast.nodeMainToken(node));
+                const name = ast.tokenSlice(ast.nodeMainToken(expr));
                 for (names) |info| {
                     if (std.mem.eql(u8, info.name, name)) return info.root;
                 }
                 return null;
             },
-            .field_access => return rootFromExpr(ast, ast.nodeData(node).node_and_token[0], names, std_modules),
-            .address_of, .deref => return rootFromExpr(ast, ast.nodeData(node).node, names, std_modules),
-            .unwrap_optional => return rootFromExpr(ast, ast.nodeData(node).node_and_token[0], names, std_modules),
+            .field_access => return rootFromExpr(ast, ast.nodeData(expr).node_and_token[0], names, std_modules),
+            .address_of, .deref => return rootFromExpr(ast, ast.nodeData(expr).node, names, std_modules),
+            .unwrap_optional => return rootFromExpr(ast, ast.nodeData(expr).node_and_token[0], names, std_modules),
             .builtin_call_two, .builtin_call_two_comma, .builtin_call, .builtin_call_comma => {
-                const path = importPathFromCall(ast, node) orelse return null;
+                const path = importPathFromCall(ast, expr) orelse return null;
                 const module_name = moduleName(path);
                 const section = sectionOf(path, std_modules);
                 return .{
                     .section = section,
                     .module_name = module_name,
+                    .identity = path,
                     .std_rank = if (section == .std) (stdRank(module_name, std_modules) orelse 0) else 0,
                 };
             },
@@ -264,6 +269,7 @@ const helpers = struct {
             const root = RootInfo{
                 .section = section,
                 .module_name = module_name,
+                .identity = info.path,
                 .std_rank = if (section == .std) (stdRank(module_name, std_modules) orelse 0) else 0,
             };
 
@@ -271,6 +277,7 @@ const helpers = struct {
                 .decl = decl,
                 .section = section,
                 .module_name = module_name,
+                .identity = info.path,
                 .std_rank = root.std_rank,
                 .is_derived = info.member != null,
             }) catch @panic("OOM");
@@ -295,6 +302,7 @@ const helpers = struct {
                     .decl = decl,
                     .section = root.section,
                     .module_name = root.module_name,
+                    .identity = root.identity,
                     .std_rank = root.std_rank,
                     .is_derived = true,
                 }) catch @panic("OOM");
@@ -346,13 +354,26 @@ const helpers = struct {
             .gt => return false,
             .eq => {},
         }
+        switch (compareCaseInsensitive(a.identity, b.identity)) {
+            .lt => return true,
+            .gt => return false,
+            .eq => {},
+        }
         if (a.is_derived != b.is_derived) return !a.is_derived;
         return @intFromEnum(a.decl) < @intFromEnum(b.decl);
     }
 
     fn sameGroup(a: Entry, b: Entry) bool {
         if (a.section == .std and b.section == .std) return true;
-        return a.section == b.section and std.mem.eql(u8, a.module_name, b.module_name);
+        return a.section == b.section and std.mem.eql(u8, a.identity, b.identity);
+    }
+
+    fn unwrapGrouped(ast: *const Ast, node: Node.Index) Node.Index {
+        var current = node;
+        while (ast.nodeTag(current) == .grouped_expression) {
+            current = ast.nodeData(current).node_and_token[0];
+        }
+        return current;
     }
 
     fn sameDeclOrder(a: []const Entry, b: []const Entry) bool {
@@ -372,12 +393,15 @@ const helpers = struct {
         return if (a.len < b.len) a.len else 0;
     }
 
-    fn newlineCount(source: []const u8, from: u32, to: u32) usize {
-        var count: usize = 0;
-        for (source[from..to]) |c| {
-            if (c == '\n') count += 1;
+    fn hasBlankLine(source: []const u8, from: u32, to: u32) bool {
+        var lines = std.mem.splitScalar(u8, source[from..to], '\n');
+        _ = lines.next();
+        var previous = lines.next() orelse return false;
+        while (lines.next()) |line| {
+            if (std.mem.trim(u8, previous, " \t\r").len == 0) return true;
+            previous = line;
         }
-        return count;
+        return false;
     }
 
     fn firstMissingBlank(ctx: *LinterContext, entries: []const Entry) ?usize {
@@ -390,7 +414,7 @@ const helpers = struct {
 
             const prev_end = ctx.semantic.nodeSpan(prev.decl).end;
             const curr_start = ctx.semantic.nodeSpan(curr.decl).start;
-            if (newlineCount(ctx.source.text(), prev_end, curr_start) < 2) return i;
+            if (!hasBlankLine(ctx.source.text(), prev_end, curr_start)) return i;
         }
         return null;
     }
@@ -423,6 +447,20 @@ const helpers = struct {
         return span;
     }
 
+    fn hasLeadingComment(ctx: *LinterContext, token: Ast.TokenIndex) bool {
+        const source = ctx.source.text();
+        const start = ctx.semantic.tokenSpan(token).start;
+        var line_start = start;
+        while (line_start > 0 and source[line_start - 1] != '\n') line_start -= 1;
+        if (line_start == 0) return false;
+
+        const previous_end = line_start - 1;
+        var previous_start = previous_end;
+        while (previous_start > 0 and source[previous_start - 1] != '\n') previous_start -= 1;
+        const line = std.mem.trim(u8, source[previous_start..previous_end], " \t\r");
+        return std.mem.startsWith(u8, line, "//");
+    }
+
     fn canFix(ctx: *LinterContext, entries: []const Entry) bool {
         if (entries.len < 2) return false;
         const span = Span.new(
@@ -432,6 +470,15 @@ const helpers = struct {
         const block = span.snippet(ctx.source.text());
         if (std.mem.indexOf(u8, block, "//") != null) return false;
         if (std.mem.indexOf(u8, block, "/*") != null) return false;
+
+        const ast = ctx.ast();
+        const first_token = ast.firstToken(entries[0].decl);
+        if (hasLeadingComment(ctx, first_token)) return false;
+
+        const end = declSpan(ctx, entries[entries.len - 1].decl).end;
+        const rest = ctx.source.text()[end..];
+        const line_end = std.mem.indexOfScalar(u8, rest, '\n') orelse rest.len;
+        if (std.mem.indexOf(u8, rest[0..line_end], "//") != null) return false;
         return true;
     }
 
@@ -514,6 +561,20 @@ test ImportsSorted {
         \\
         \\const casez = @import("casez");
     ;
+    const passing_grouped =
+        \\const Thing = @This();
+        \\
+        \\const std = (@import("std"));
+        \\
+        \\const casez = @import("casez");
+    ;
+    const comment_not_blank =
+        \\const Thing = @This();
+        \\
+        \\const std = @import("std");
+        \\// Package types.
+        \\const casez = @import("casez");
+    ;
     const passing_unary_alias =
         \\const Thing = @This();
         \\
@@ -587,9 +648,10 @@ test ImportsSorted {
     defer runner.deinit();
     runner.setFileName("Test.zig");
     try runner
-        .withPass(&.{ passing, passing_alias_chain, passing_unary_alias, passing_interleaved })
+        .withPass(&.{ passing, passing_alias_chain, passing_unary_alias, passing_interleaved, passing_grouped })
         .withFail(&.{
             package_before_std,
+            comment_not_blank,
             file_before_package,
             wrong_alphabetical,
             missing_blank_line,

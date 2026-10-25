@@ -1,12 +1,12 @@
 //! ## What This Rule Does
-//! Requires a trailing comma on multi-field container declarations and on
-//! multiline struct initializers.
+//! Requires a trailing comma on nonempty container declarations and on
+//! multiline struct initializers. Enums are excluded.
 //!
 //! `zig fmt` expands a field list to one field per line when the last field has
 //! a trailing comma. This rule adds that comma, so formatting takes care of the
 //! layout.
 //!
-//! Single-field containers and single-line struct literals are left alone.
+//! Single-line struct literals are left alone.
 //!
 //! Hand-written `*.mixin.zig` and `*.replace.zig` fragments are linted. Set
 //! `skip_fragments` to exclude them.
@@ -35,9 +35,11 @@ pub fn runOnNode(self: *const TrailingComma, wrapper: NodeWrapper, ctx: *LinterC
         .tagged_union,
         .tagged_union_two,
         .tagged_union_enum_tag,
+        .root,
         => {
             var buffer: [2]Node.Index = undefined;
             const decl = ast.fullContainerDecl(&buffer, wrapper.idx) orelse return;
+            if (wrapper.node.tag != .root and ast.tokenTag(decl.ast.main_token) == .keyword_enum) return;
 
             var field_count: usize = 0;
             var last_field: ?Node.Index = null;
@@ -46,7 +48,7 @@ pub fn runOnNode(self: *const TrailingComma, wrapper: NodeWrapper, ctx: *LinterC
                 field_count += 1;
                 last_field = member;
             }
-            if (field_count < 2) return;
+            if (field_count == 0) return;
 
             const last = last_field.?;
             if (helpers.hasTrailingComma(ast, last)) return;
@@ -76,17 +78,42 @@ pub fn rule(self: *TrailingComma) Rule {
 }
 
 fn report(ctx: *LinterContext, last: Node.Index, comptime message: []const u8) void {
+    const ast = ctx.ast();
     const end = ctx.semantic.nodeSpan(last).end;
+    const last_token = ast.lastToken(last);
+    const fix: CommaFix = if (ast.tokenTag(last_token) == .multiline_string_literal_line)
+        multilineStringFix(ctx, end)
+    else
+        CommaFix{ .position = end, .kind = .inline_comma };
     const diagnostic = ctx.diagnostic(message, .{ctx.spanN(last)});
-    ctx.reportWithFix(CommaFix{ .position = end }, diagnostic, &applyFix);
+    ctx.reportWithFix(fix, diagnostic, &applyFix);
 }
+
+const CommaKind = enum { inline_comma, after_line_lf, after_line_crlf, at_eof };
 
 const CommaFix = struct {
     position: u32,
+    kind: CommaKind,
 };
 
 fn applyFix(fix: CommaFix, builder: Fix.Builder) anyerror!Fix {
-    return builder.replace(Span.new(fix.position, fix.position), .static(","));
+    return switch (fix.kind) {
+        .inline_comma => builder.replace(Span.new(fix.position, fix.position), .static(",")),
+        .after_line_lf => builder.replace(Span.new(fix.position, fix.position), .static(",\n")),
+        .after_line_crlf => builder.replace(Span.new(fix.position, fix.position), .static(",\r\n")),
+        .at_eof => builder.replace(Span.new(fix.position, fix.position), .static("\n,")),
+    };
+}
+
+fn multilineStringFix(ctx: *LinterContext, end: u32) CommaFix {
+    const source = ctx.source.text();
+    if (end < source.len and source[end] == '\r' and end + 1 < source.len and source[end + 1] == '\n') {
+        return .{ .position = end + 2, .kind = .after_line_crlf };
+    }
+    if (end < source.len and source[end] == '\n') {
+        return .{ .position = end + 1, .kind = .after_line_lf };
+    }
+    return .{ .position = end, .kind = .at_eof };
 }
 
 const helpers = struct {
@@ -135,6 +162,31 @@ test TrailingComma {
         \\    .b = 2,
         \\};
     ;
+    const failing_root =
+        \\a: u8, b: u8
+    ;
+    const fixed_root =
+        \\a: u8, b: u8,
+    ;
+    const failing_single =
+        \\const Thing = struct { a: u8 };
+    ;
+    const fixed_single =
+        \\const Thing = struct { a: u8, };
+    ;
+    const failing_multiline_string =
+        \\const Thing = struct {
+        \\    text: []const u8 =
+        \\        \\hello
+        \\};
+    ;
+    const fixed_multiline_string =
+        \\const Thing = struct {
+        \\    text: []const u8 =
+        \\        \\hello
+        \\,
+        \\};
+    ;
 
     var impl = TrailingComma{};
     var runner = RuleTester.init(testing.allocator, impl.rule());
@@ -142,13 +194,15 @@ test TrailingComma {
     try runner
         .withPass(&.{
             "const Thing = struct { a: u8, b: u8, };",
-            "const Thing = struct { a: u8 };",
+            "const Thing = struct { a: u8, };",
+            "const Mode = enum { quiet, verbose };",
             "const thing = Thing{ .a = 1, .b = 2 };",
             "const thing = Thing{ .a = 1 };",
             "const thing = Thing{\n    .a = 1,\n    .b = 2,\n};",
             "const Thing = struct {};",
+            fixed_multiline_string,
         })
-        .withFail(&.{ failing_container, failing_literal })
+        .withFail(&.{ failing_container, failing_literal, failing_root, failing_single, failing_multiline_string })
         .withFix(&.{
             .{
                 .src = failing_container,
@@ -157,6 +211,18 @@ test TrailingComma {
             .{
                 .src = failing_literal,
                 .expected = fixed_literal,
+            },
+            .{
+                .src = failing_root,
+                .expected = fixed_root,
+            },
+            .{
+                .src = failing_single,
+                .expected = fixed_single,
+            },
+            .{
+                .src = failing_multiline_string,
+                .expected = fixed_multiline_string,
             },
         })
         .run();

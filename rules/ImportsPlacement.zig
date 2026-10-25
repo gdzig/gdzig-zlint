@@ -147,32 +147,42 @@ fn isDirectImportDecl(ast: *const Ast, decl: Node.Index) bool {
 }
 
 fn isDirectImportExpr(ast: *const Ast, node: Node.Index) bool {
-    switch (ast.nodeTag(node)) {
+    const expr = unwrapGrouped(ast, node);
+    switch (ast.nodeTag(expr)) {
         .builtin_call_two, .builtin_call_two_comma, .builtin_call, .builtin_call_comma => {
-            return importPathFromCall(ast, node) != null;
+            return importPathFromCall(ast, expr) != null;
         },
-        .field_access => return isDirectImportExpr(ast, ast.nodeData(node).node_and_token[0]),
+        .field_access => return isDirectImportExpr(ast, ast.nodeData(expr).node_and_token[0]),
         else => return false,
     }
 }
 
 fn isImportExpr(ast: *const Ast, node: Node.Index, names: []const []const u8) bool {
-    switch (ast.nodeTag(node)) {
+    const expr = unwrapGrouped(ast, node);
+    switch (ast.nodeTag(expr)) {
         .identifier => {
-            const name = ast.tokenSlice(ast.nodeMainToken(node));
+            const name = ast.tokenSlice(ast.nodeMainToken(expr));
             for (names) |candidate| {
                 if (std.mem.eql(u8, candidate, name)) return true;
             }
             return false;
         },
-        .field_access => return isImportExpr(ast, ast.nodeData(node).node_and_token[0], names),
-        .address_of, .deref => return isImportExpr(ast, ast.nodeData(node).node, names),
-        .unwrap_optional => return isImportExpr(ast, ast.nodeData(node).node_and_token[0], names),
+        .field_access => return isImportExpr(ast, ast.nodeData(expr).node_and_token[0], names),
+        .address_of, .deref => return isImportExpr(ast, ast.nodeData(expr).node, names),
+        .unwrap_optional => return isImportExpr(ast, ast.nodeData(expr).node_and_token[0], names),
         .builtin_call_two, .builtin_call_two_comma, .builtin_call, .builtin_call_comma => {
-            return importPathFromCall(ast, node) != null;
+            return importPathFromCall(ast, expr) != null;
         },
         else => return false,
     }
+}
+
+fn unwrapGrouped(ast: *const Ast, node: Node.Index) Node.Index {
+    var current = node;
+    while (ast.nodeTag(current) == .grouped_expression) {
+        current = ast.nodeData(current).node_and_token[0];
+    }
+    return current;
 }
 
 fn importPathFromCall(ast: *const Ast, call: Node.Index) ?[]const u8 {

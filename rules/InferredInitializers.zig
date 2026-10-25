@@ -48,13 +48,13 @@ pub fn runOnNode(self: *const InferredInitializers, wrapper: NodeWrapper, ctx: *
             const decl = ast.fullVarDecl(wrapper.idx) orelse return;
             const type_node = decl.ast.type_node.unwrap() orelse return;
             const init_node = decl.ast.init_node.unwrap() orelse return;
-            check(ctx, type_node, init_node);
+            check(ctx, helpers.unwrapResultType(ast, type_node), init_node);
         },
         .@"return" => {
             if (!self.check_returns) return;
             const expr = ast.nodeData(wrapper.idx).opt_node.unwrap() orelse return;
             const return_type = helpers.enclosingReturnType(ctx, wrapper.idx) orelse return;
-            check(ctx, helpers.unwrapErrorUnion(ast, return_type), expr);
+            check(ctx, helpers.unwrapResultType(ast, return_type), expr);
         },
         else => {},
     }
@@ -115,12 +115,32 @@ fn check(ctx: *LinterContext, type_node: Node.Index, init_node: Node.Index) void
                 &applyFix,
             );
         },
+        .array_init => {
+            var buffer: [2]Node.Index = undefined;
+            const init = ast.fullArrayInit(&buffer, init_node) orelse return;
+            const explicit = init.ast.type_expr.unwrap() orelse return;
+            if (!std.mem.eql(u8, helpers.sourceOf(ctx, explicit), type_source)) return;
+
+            ctx.reportWithFix(
+                InitFix{
+                    .span = ctx.semantic.nodeSpan(explicit),
+                    .kind = .use_dot,
+                },
+                ctx.diagnosticf(
+                    "use an inferred initializer for type '{s}'",
+                    .{type_source},
+                    .{ctx.spanN(explicit)},
+                ),
+                &applyFix,
+            );
+        },
     }
 }
 
 const InitKind = enum {
     struct_init,
     call,
+    array_init,
 };
 
 fn init_node_tag(ast: *const Ast, node: Node.Index) ?InitKind {
@@ -139,6 +159,15 @@ fn init_node_tag(ast: *const Ast, node: Node.Index) ?InitKind {
         .call_one,
         .call_one_comma,
         => .call,
+        .array_init_one,
+        .array_init_one_comma,
+        .array_init_dot_two,
+        .array_init_dot_two_comma,
+        .array_init_dot,
+        .array_init_dot_comma,
+        .array_init,
+        .array_init_comma,
+        => .array_init,
         else => null,
     };
 }
@@ -182,9 +211,15 @@ const helpers = struct {
         return null;
     }
 
-    fn unwrapErrorUnion(ast: *const Ast, node: Node.Index) Node.Index {
-        if (ast.nodeTag(node) != .error_union) return node;
-        return ast.nodeData(node).node_and_node[1];
+    fn unwrapResultType(ast: *const Ast, node: Node.Index) Node.Index {
+        var current = node;
+        while (true) {
+            switch (ast.nodeTag(current)) {
+                .error_union => current = ast.nodeData(current).node_and_node[1],
+                .optional_type => current = ast.nodeData(current).node,
+                else => return current,
+            }
+        }
     }
 };
 
@@ -209,6 +244,30 @@ test InferredInitializers {
     const fixed_return =
         \\fn make() Config { return .{ .enabled = true }; }
     ;
+    const failing_optional =
+        \\const config: ?Config = Config{ .enabled = true };
+    ;
+    const fixed_optional =
+        \\const config: ?Config = .{ .enabled = true };
+    ;
+    const failing_error_union =
+        \\const config: anyerror!Config = Config{ .enabled = true };
+    ;
+    const fixed_error_union =
+        \\const config: anyerror!Config = .{ .enabled = true };
+    ;
+    const failing_optional_return =
+        \\fn make() ?Config { return Config{ .enabled = true }; }
+    ;
+    const fixed_optional_return =
+        \\fn make() ?Config { return .{ .enabled = true }; }
+    ;
+    const failing_array =
+        \\const pair: [2]u8 = [2]u8{ 1, 2 };
+    ;
+    const fixed_array =
+        \\const pair: [2]u8 = .{ 1, 2 };
+    ;
 
     var impl = InferredInitializers{};
     var runner = RuleTester.init(testing.allocator, impl.rule());
@@ -220,6 +279,9 @@ test InferredInitializers {
             "const config = Config{ .enabled = true };",
             "const config: Config = Other{ .enabled = true };",
             "fn make() Config { return .{ .enabled = true }; }",
+            "const config: ?Config = .{ .enabled = true };",
+            "fn make() ?Config { return .{ .enabled = true }; }",
+            "const pair: [2]u8 = .{ 1, 2 };",
             "const config: Config = Config.default();",
         })
         .withFail(&.{
@@ -227,6 +289,10 @@ test InferredInitializers {
             failing_call,
             failing_return,
             "fn make() !Config { return Config{ .enabled = true }; }",
+            failing_optional,
+            failing_error_union,
+            failing_optional_return,
+            failing_array,
         })
         .withFix(&.{
             .{
@@ -240,6 +306,22 @@ test InferredInitializers {
             .{
                 .src = failing_return,
                 .expected = fixed_return,
+            },
+            .{
+                .src = failing_optional,
+                .expected = fixed_optional,
+            },
+            .{
+                .src = failing_error_union,
+                .expected = fixed_error_union,
+            },
+            .{
+                .src = failing_optional_return,
+                .expected = fixed_optional_return,
+            },
+            .{
+                .src = failing_array,
+                .expected = fixed_array,
             },
         })
         .run();

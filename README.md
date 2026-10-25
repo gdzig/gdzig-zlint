@@ -15,10 +15,10 @@ pinned ZLint release plus the rules in `rules/`.
 | `gdzig-file-name-case` | A file with top-level container fields is a type and uses TitleCase; otherwise it is a namespace and uses snake_case |
 | `gdzig-import-alias-case` | An import alias matches the imported file's name, or the selected member of a namespace file |
 | `gdzig-tests-last` | Tests are at file scope, grouped after production declarations and before the final imports; `testing` sits directly above the first test |
-| `gdzig-trailing-comma` | Multi-field container declarations and multiline struct literals end with a trailing comma, so `zig fmt` puts each field on its own line; safe autofix available |
-| `gdzig-public-docs` | Public functions have a `///` doc comment describing purpose, inputs, and significant return or error behavior |
+| `gdzig-trailing-comma` | Nonempty container declarations (enums excluded) and multiline struct literals end with a trailing comma, so `zig fmt` puts each field on its own line; safe autofix available |
+| `gdzig-public-docs` | Public functions, including extern declarations, have a `///` doc comment (presence only) |
 | `gdzig-inferred-initializers` | Uses `.{}` and `.init(...)` when the destination type is already known, including matching return types; safe autofix available |
-| `gdzig-testing-usage` | A `testing` namespace is only referenced inside test blocks or inside the namespace itself |
+| `gdzig-testing-usage` | Direct references to a local `testing` namespace are limited to test code; member-access checking is opt-in |
 
 Hand-written `*.mixin.zig` and `*.replace.zig` fragments are linted by default.
 `gdzig-file-name-case` skips them because a fragment's contents cannot be
@@ -143,12 +143,18 @@ Rule options:
 - `gdzig-testing-usage`
   - `skip_fragments` (default `false`)
   - `namespace` (default `"testing"`)
+  - `check_identifier_references` (default `true`)
+  - `report_member_access` (default `false`)
+  - `allow_test_paths` (default `true`)
 
 `gdzig-inferred-initializers` handles annotated variable declarations and
 returns whose type matches the explicit initializer. It does not inspect
-function arguments. `gdzig-testing-usage` is syntactic: it reports member
-access such as `module.testing.helper` outside a test block, but cannot check
-whether that namespace is actually `pub` for external callers.
+function arguments. `gdzig-testing-usage` ignores `std.testing` aliases and
+paths under `test` or `tests`. It reports local references such as
+`testing.helper()` outside test code. Set `report_member_access` to also check
+`module.testing.helper`; that can reject legitimate fixture tools, so it is
+off by default. The rule cannot check whether a namespace is `pub` for external
+callers.
 
 These are fields on the custom rules, parsed by ZLint from `zlint.json`. They
 are not ZLint built-in settings.
@@ -212,8 +218,9 @@ until upstream #433 is fixed. The release binary is the primary distribution.
   `zlint.linter.fix` to custom rules; without it, ZLint 0.10.0 keeps the fix
   types private. `gdzig-imports-sorted` is safe-fixable. It rewrites a
   contiguous bottom import block and skips blocks containing comments or
-  interleaved declarations. `gdzig-imports-placement` and the other rules
-  remain diagnostics-only.
+  interleaved declarations. `gdzig-trailing-comma` and
+  `gdzig-inferred-initializers` also have safe fixes. The remaining rules are
+  diagnostics-only.
 - The vendored ZLint source is pinned to v0.10.0 commit
   `3ef67af7dfed776cb03012563942cdf3a97f1b59`. `patches/` contains two small
   patches: one raises ZLint's comptime branch quota for several custom rules,
@@ -230,6 +237,11 @@ until upstream #433 is fixed. The release binary is the primary distribution.
 - ZLint 0.10.0 has no rule groups, presets, or `extends`. A preset is a
   complete `zlint.json`; this repository ships `zlint.template.json` as the
   single recommended set.
+- `gdzig-imports-sorted` classifies bare module names as package imports and
+  paths as file imports. It has no project graph, so a project's own bare module
+  sorts with third-party packages. This is a deliberate approximation of the
+  standard's third-party/project split; use a path import when the distinction
+  matters.
 - Run `--fix` for the import order, move any misplaced imports by hand, review
   the diff, then turn on `--deny-warnings` in CI. The custom import-order fix
   is conservative; ZLint's built-in fixes need separate review.

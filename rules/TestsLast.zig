@@ -158,16 +158,17 @@ const helpers = struct {
     }
 
     fn importInfoFromExpr(ast: *const Ast, node: Node.Index) ?ImportInfo {
-        switch (ast.nodeTag(node)) {
+        const expr = unwrapGrouped(ast, node);
+        switch (ast.nodeTag(expr)) {
             .builtin_call_two, .builtin_call_two_comma, .builtin_call, .builtin_call_comma => {
-                const path = importPathFromCall(ast, node) orelse return null;
+                const path = importPathFromCall(ast, expr) orelse return null;
                 return .{
                     .path = path,
                     .member = null,
                 };
             },
             .field_access => {
-                const data = ast.nodeData(node).node_and_token;
+                const data = ast.nodeData(expr).node_and_token;
                 const base = importInfoFromExpr(ast, data[0]) orelse return null;
                 return .{
                     .path = base.path,
@@ -185,12 +186,21 @@ const helpers = struct {
     }
 
     fn leftmostIdentifier(ast: *const Ast, node: Node.Index) ?Node.Index {
-        return switch (ast.nodeTag(node)) {
-            .identifier => node,
-            .field_access, .unwrap_optional => leftmostIdentifier(ast, ast.nodeData(node).node_and_token[0]),
-            .address_of, .deref => leftmostIdentifier(ast, ast.nodeData(node).node),
+        const expr = unwrapGrouped(ast, node);
+        return switch (ast.nodeTag(expr)) {
+            .identifier => expr,
+            .field_access, .unwrap_optional => leftmostIdentifier(ast, ast.nodeData(expr).node_and_token[0]),
+            .address_of, .deref => leftmostIdentifier(ast, ast.nodeData(expr).node),
             else => null,
         };
+    }
+
+    fn unwrapGrouped(ast: *const Ast, node: Node.Index) Node.Index {
+        var current = node;
+        while (ast.nodeTag(current) == .grouped_expression) {
+            current = ast.nodeData(current).node_and_token[0];
+        }
+        return current;
     }
 
     fn isImportDecl(ast: *const Ast, decl: Node.Index, names: []const []const u8) bool {

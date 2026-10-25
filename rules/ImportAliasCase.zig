@@ -23,27 +23,34 @@ skip_fragments: bool = false,
 const ImportAliasCase = @This();
 
 /// Checks import aliases against the imported file's name.
-pub fn runOnce(self: *const ImportAliasCase, ctx: *LinterContext) void {
-    const pathname = ctx.source.pathname orelse return;
-    if (self.skip_fragments and helpers.isFragment(pathname)) return;
+pub fn runOnNode(self: *const ImportAliasCase, wrapper: NodeWrapper, ctx: *LinterContext) void {
+    if (self.skip_fragments and helpers.isFragment(ctx.source.pathname)) return;
+
+    switch (wrapper.node.tag) {
+        .global_var_decl,
+        .local_var_decl,
+        .aligned_var_decl,
+        .simple_var_decl,
+        => {},
+        else => return,
+    }
 
     const ast = ctx.ast();
-    for (ast.rootDecls()) |decl| {
-        const info = helpers.importInfoFromDecl(ast, decl) orelse continue;
-        if (!std.mem.endsWith(u8, info.path, ".zig")) continue;
+    const decl = wrapper.idx;
+    const info = helpers.importInfoFromDecl(ast, decl) orelse return;
+    if (!std.mem.endsWith(u8, info.path, ".zig")) return;
 
-        const base = helpers.basenameWithoutExtension(info.path);
-        if (!helpers.isTitleCase(base) and !helpers.isSnakeCase(base)) continue;
+    const base = helpers.basenameWithoutExtension(info.path);
+    if (!helpers.isTitleCase(base) and !helpers.isSnakeCase(base)) return;
 
-        const alias = helpers.declName(ast, decl) orelse continue;
-        const expected = info.member orelse base;
-        if (!std.mem.eql(u8, alias, expected)) {
-            ctx.report(ctx.diagnosticf(
-                "import alias '{s}' must be '{s}' for '{s}'",
-                .{ alias, expected, info.path },
-                .{ctx.spanN(decl)},
-            ));
-        }
+    const alias = helpers.declName(ast, decl) orelse return;
+    const expected = info.member orelse base;
+    if (!std.mem.eql(u8, alias, expected)) {
+        ctx.report(ctx.diagnosticf(
+            "import alias '{s}' must be '{s}' for '{s}'",
+            .{ alias, expected, info.path },
+            .{ctx.spanN(decl)},
+        ));
     }
 }
 
@@ -118,16 +125,17 @@ const helpers = struct {
     }
 
     fn importInfoFromExpr(ast: *const Ast, node: Node.Index) ?ImportInfo {
-        switch (ast.nodeTag(node)) {
+        const expr = unwrapGrouped(ast, node);
+        switch (ast.nodeTag(expr)) {
             .builtin_call_two, .builtin_call_two_comma, .builtin_call, .builtin_call_comma => {
-                const path = importPathFromCall(ast, node) orelse return null;
+                const path = importPathFromCall(ast, expr) orelse return null;
                 return .{
                     .path = path,
                     .member = null,
                 };
             },
             .field_access => {
-                const data = ast.nodeData(node).node_and_token;
+                const data = ast.nodeData(expr).node_and_token;
                 const base = importInfoFromExpr(ast, data[0]) orelse return null;
                 return .{
                     .path = base.path,
@@ -136,6 +144,14 @@ const helpers = struct {
             },
             else => return null,
         }
+    }
+
+    fn unwrapGrouped(ast: *const Ast, node: Node.Index) Node.Index {
+        var current = node;
+        while (ast.nodeTag(current) == .grouped_expression) {
+            current = ast.nodeData(current).node_and_token[0];
+        }
+        return current;
     }
 
     fn importInfoFromDecl(ast: *const Ast, decl: Node.Index) ?ImportInfo {
@@ -166,6 +182,12 @@ test ImportAliasCase {
     const wrong_relative_alias =
         \\const nested_config = @import("../NestedConfig.zig");
     ;
+    const nested_import =
+        \\fn load() void {
+        \\    const config = @import("Config.zig");
+        \\    _ = config;
+        \\}
+    ;
 
     var implementation = ImportAliasCase{};
     var runner = RuleTester.init(testing.allocator, implementation.rule());
@@ -173,7 +195,13 @@ test ImportAliasCase {
     runner.setFileName("Test.zig");
     try runner
         .withPass(&.{passing})
-        .withFail(&.{ wrong_type_alias, wrong_namespace_alias, wrong_member_alias, wrong_relative_alias })
+        .withFail(&.{
+            wrong_type_alias,
+            wrong_namespace_alias,
+            wrong_member_alias,
+            wrong_relative_alias,
+            nested_import,
+        })
         .run();
 
     const fragment_source =
@@ -201,6 +229,7 @@ const testing = std.testing;
 const zlint = @import("zlint");
 const Ast = zlint.Semantic.Ast;
 const Node = Ast.Node;
+const NodeWrapper = zlint.linter.rule.NodeWrapper;
 const Rule = zlint.linter.rule.Rule;
 const RuleTester = zlint.linter.tester;
 const LinterContext = zlint.linter.lint_context;
