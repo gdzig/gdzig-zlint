@@ -69,6 +69,10 @@ package names, then file imports, with root groups alphabetical inside each
 section and separated by a blank line. `build_options` is a package import
 unless it is added to `std_modules`.
 
+If you configured 0.2.0, move the `std_modules` option from
+`gdzig-imports-last` to the new `gdzig-imports-sorted` rule. In 0.3.0,
+`gdzig-imports-last` checks placement only.
+
 ```json
 {
   "$schema": "https://raw.githubusercontent.com/DonIsaac/zlint/refs/tags/v0.10.0/zlint.schema.json",
