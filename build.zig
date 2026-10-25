@@ -29,7 +29,7 @@ pub fn customRulePaths(dep: *std.Build.Dependency) []const std.Build.LazyPath {
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
-    const version = b.option([]const u8, "version", "gdzig-zlint version string") orelse "0.6.1";
+    const version = b.option([]const u8, "version", "gdzig-zlint version string") orelse manifest.version;
 
     const zlint_dep = b.dependency("zlint", .{
         .target = target,
@@ -73,5 +73,7 @@ comptime {
 
 const std = @import("std");
 const builtin = @import("builtin");
+
+const manifest = @import("build.zig.zon");
 
 const zlint = @import("zlint");
