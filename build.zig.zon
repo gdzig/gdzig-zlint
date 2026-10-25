@@ -1,6 +1,6 @@
 .{
     .name = .gdzig_zlint,
-    .version = "0.6.0",
+    .version = "0.6.1",
     .minimum_zig_version = "0.16.0",
     .fingerprint = 0xfa061fb9bfef935f,
     .dependencies = .{
@@ -13,6 +13,7 @@
         "scripts",
         "patches",
         "README.md",
+        "LICENSE",
         "THIRD_PARTY_NOTICES.md",
         "zlint.template.json",
     },

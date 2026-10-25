@@ -126,4 +126,5 @@ jobs:
           files: |
             artifacts/gdzig-zlint-*
             artifacts/SHA256SUMS
+            LICENSE
             THIRD_PARTY_NOTICES.md
