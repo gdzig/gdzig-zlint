@@ -7,7 +7,8 @@
 //! `gdzig-imports-sorted`. This rule only checks placement, so a file can
 //! enable either check independently.
 //!
-//! Generated `*.mixin.zig` and `*.replace.zig` fragments are skipped.
+//! Hand-written `*.mixin.zig` and `*.replace.zig` fragments are linted. Set
+//! `skip_fragments` to exclude them.
 
 pub const meta: Rule.Meta = .{
     .name = "gdzig-imports-placement",
@@ -26,8 +27,8 @@ pub const Position = enum {
 /// Where imports belong relative to the file's other declarations.
 position: Position = .bottom,
 
-/// Skip generated mixin and replace fragments.
-skip_fragments: bool = true,
+/// Skip hand-written mixin and replace fragments.
+skip_fragments: bool = false,
 
 const ImportsPlacement = @This();
 
@@ -283,13 +284,13 @@ test ImportsPlacement {
         .withFail(&.{ import_at_bottom, mixed, derived_alias_at_bottom })
         .run();
 
-    var fragment_impl = ImportsPlacement{};
+    var fragment_impl = ImportsPlacement{ .skip_fragments = true };
     var fragment_runner = RuleTester.init(testing.allocator, fragment_impl.rule());
     defer fragment_runner.deinit();
     fragment_runner.setFileName("Aabb.mixin.zig");
     try fragment_runner.withPass(&.{import_at_top}).run();
 
-    var fragment_check = ImportsPlacement{ .skip_fragments = false };
+    var fragment_check = ImportsPlacement{};
     var fragment_check_runner = RuleTester.init(testing.allocator, fragment_check.rule());
     defer fragment_check_runner.deinit();
     fragment_check_runner.setFileName("Aabb.mixin.zig");

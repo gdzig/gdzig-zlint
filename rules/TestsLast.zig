@@ -8,7 +8,8 @@
 //! When a `testing` namespace is present, it goes directly above the first
 //! test block, after all production declarations.
 //!
-//! Generated `*.mixin.zig` and `*.replace.zig` fragments are skipped.
+//! Hand-written `*.mixin.zig` and `*.replace.zig` fragments are linted. Set
+//! `skip_fragments` to exclude them.
 
 pub const meta: Rule.Meta = .{
     .name = "gdzig-tests-last",
@@ -16,8 +17,8 @@ pub const meta: Rule.Meta = .{
     .default = .warning,
 };
 
-/// Skip generated mixin and replace fragments.
-skip_fragments: bool = true,
+/// Skip hand-written mixin and replace fragments.
+skip_fragments: bool = false,
 
 /// Require the `testing` namespace to sit directly above the first test.
 check_testing_namespace: bool = true,
@@ -322,11 +323,17 @@ test TestsLast {
     no_check_runner.setFileName("Test.zig");
     try no_check_runner.withPass(&.{testing_namespace_not_adjacent}).run();
 
-    var fragment_impl = TestsLast{};
+    var fragment_impl = TestsLast{ .skip_fragments = true };
     var fragment_runner = RuleTester.init(testing.allocator, fragment_impl.rule());
     defer fragment_runner.deinit();
     fragment_runner.setFileName("Aabb.mixin.zig");
     try fragment_runner.withPass(&.{production_after_test}).run();
+
+    var fragment_check = TestsLast{};
+    var fragment_check_runner = RuleTester.init(testing.allocator, fragment_check.rule());
+    defer fragment_check_runner.deinit();
+    fragment_check_runner.setFileName("Aabb.mixin.zig");
+    try fragment_check_runner.withFail(&.{production_after_test}).run();
 }
 
 const std = @import("std");

@@ -9,7 +9,8 @@
 //! another file is `pub` for external callers, so it reports cross-file member
 //! access outside tests too.
 //!
-//! Generated `*.mixin.zig` and `*.replace.zig` fragments are skipped.
+//! Hand-written `*.mixin.zig` and `*.replace.zig` fragments are linted. Set
+//! `skip_fragments` to exclude them.
 
 pub const meta: Rule.Meta = .{
     .name = "gdzig-testing-usage",
@@ -17,8 +18,8 @@ pub const meta: Rule.Meta = .{
     .default = .warning,
 };
 
-/// Skip generated mixin and replace fragments.
-skip_fragments: bool = true,
+/// Skip hand-written mixin and replace fragments.
+skip_fragments: bool = false,
 
 /// Namespace name reserved for test-only helpers.
 namespace: []const u8 = "testing",
@@ -124,11 +125,17 @@ test TestingUsage {
         })
         .run();
 
-    var fragment_impl = TestingUsage{ .skip_fragments = false };
+    var fragment_impl = TestingUsage{};
     var fragment_runner = RuleTester.init(testing.allocator, fragment_impl.rule());
     defer fragment_runner.deinit();
     fragment_runner.setFileName("Thing.mixin.zig");
     try fragment_runner.withFail(&.{"fn run() void {\n    testing.helper();\n}"}).run();
+
+    var skip_impl = TestingUsage{ .skip_fragments = true };
+    var skip_runner = RuleTester.init(testing.allocator, skip_impl.rule());
+    defer skip_runner.deinit();
+    skip_runner.setFileName("Thing.mixin.zig");
+    try skip_runner.withPass(&.{"fn run() void {\n    testing.helper();\n}"}).run();
 }
 
 const std = @import("std");

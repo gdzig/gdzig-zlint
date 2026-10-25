@@ -15,7 +15,8 @@
 //!
 //! Import placement is enforced separately by `gdzig-imports-placement`.
 //!
-//! Generated `*.mixin.zig` and `*.replace.zig` fragments are skipped.
+//! Hand-written `*.mixin.zig` and `*.replace.zig` fragments are linted. Set
+//! `skip_fragments` to exclude them.
 
 pub const meta: Rule.Meta = .{
     .name = "gdzig-imports-sorted",
@@ -24,8 +25,8 @@ pub const meta: Rule.Meta = .{
     .fix = .safe_fix,
 };
 
-/// Skip generated mixin and replace fragments.
-skip_fragments: bool = true,
+/// Skip hand-written mixin and replace fragments.
+skip_fragments: bool = false,
 
 /// Paths that belong in the std section.
 std_modules: []const []const u8 = &.{ "std", "builtin" },
@@ -620,11 +621,17 @@ test ImportsSorted {
     default_runner.setFileName("Test.zig");
     try default_runner.withFail(&.{build_options_with_std}).run();
 
-    var fragment_impl = ImportsSorted{};
+    var fragment_impl = ImportsSorted{ .skip_fragments = true };
     var fragment_runner = RuleTester.init(testing.allocator, fragment_impl.rule());
     defer fragment_runner.deinit();
     fragment_runner.setFileName("Aabb.mixin.zig");
     try fragment_runner.withPass(&.{package_before_std}).run();
+
+    var fragment_check = ImportsSorted{};
+    var fragment_check_runner = RuleTester.init(testing.allocator, fragment_check.rule());
+    defer fragment_check_runner.deinit();
+    fragment_check_runner.setFileName("Aabb.mixin.zig");
+    try fragment_check_runner.withFail(&.{package_before_std}).run();
 }
 
 const std = @import("std");

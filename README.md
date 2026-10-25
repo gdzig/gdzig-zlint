@@ -20,8 +20,11 @@ pinned ZLint release plus the rules in `rules/`.
 | `gdzig-inferred-initializers` | Uses `.{}` and `.init(...)` when the destination type is already known, including matching return types; safe autofix available |
 | `gdzig-testing-usage` | A `testing` namespace is only referenced inside test blocks or inside the namespace itself |
 
-All custom rules skip generated `*.mixin.zig` and `*.replace.zig` fragments.
-The template also enables ZLint's built-in `line-length` rule at 120 columns.
+Hand-written `*.mixin.zig` and `*.replace.zig` fragments are linted by default.
+`gdzig-file-name-case` skips them because a fragment's contents cannot be
+classified as a type or a namespace on its own. Set `skip_fragments` on any
+rule to exclude fragments. The template also enables ZLint's built-in
+`line-length` rule at 120 columns.
 
 ## Install the binary
 
@@ -118,27 +121,27 @@ flag those keys as unknown. ZLint still parses and applies them.
 Rule options:
 
 - `gdzig-imports-sorted`
-  - `skip_fragments` (default `true`)
+  - `skip_fragments` (default `false`)
   - `std_modules` (default `["std", "builtin"]`; order sets priority inside the std section)
 - `gdzig-imports-placement`
   - `position` (default `"bottom"`; `bottom` or `top`)
-  - `skip_fragments` (default `true`)
+  - `skip_fragments` (default `false`)
 - `gdzig-file-name-case`
   - `skip_fragments` (default `true`)
 - `gdzig-import-alias-case`
-  - `skip_fragments` (default `true`)
+  - `skip_fragments` (default `false`)
 - `gdzig-tests-last`
-  - `skip_fragments` (default `true`)
+  - `skip_fragments` (default `false`)
   - `check_testing_namespace` (default `true`)
 - `gdzig-trailing-comma`
-  - `skip_fragments` (default `true`)
+  - `skip_fragments` (default `false`)
 - `gdzig-public-docs`
-  - `skip_fragments` (default `true`)
+  - `skip_fragments` (default `false`)
 - `gdzig-inferred-initializers`
-  - `skip_fragments` (default `true`)
+  - `skip_fragments` (default `false`)
   - `check_returns` (default `true`)
 - `gdzig-testing-usage`
-  - `skip_fragments` (default `true`)
+  - `skip_fragments` (default `false`)
   - `namespace` (default `"testing"`)
 
 `gdzig-inferred-initializers` handles annotated variable declarations and
@@ -215,14 +218,15 @@ until upstream #433 is fixed. The release binary is the primary distribution.
   `3ef67af7dfed776cb03012563942cdf3a97f1b59`. `patches/` contains two small
   patches: one raises ZLint's comptime branch quota for several custom rules,
   and one exports the fix module.
-- ZLint's `ignore` handling has rough edges. The rules skip fragments
-  themselves, and CI passes tracked files explicitly:
+- ZLint's `ignore` handling has rough edges. Rules can skip fragments with
+  `skip_fragments`, and CI passes tracked files explicitly:
   `git ls-files '*.zig' | gdzig-zlint --stdin --deny-warnings`.
-- Generated code is out of scope. Rules skip `*.mixin.zig` and
-  `*.replace.zig`, and consumers should ignore generated directories
-  wholesale, as gdzig does. ZLint 0.10.0 has one rule set per run and no
-  per-directory overrides, so correctness-only linting of generated output
-  needs a separate invocation and config.
+- Hand-written fragments are in scope. `*.mixin.zig` and `*.replace.zig` are
+  linted by default. Generated outputs are out of scope, so consumers should
+  ignore generated directories and re-include fragment files where needed.
+  ZLint 0.10.0 has one rule set per run and no per-directory overrides, so
+  correctness-only linting of generated output needs a separate invocation
+  and config.
 - ZLint 0.10.0 has no rule groups, presets, or `extends`. A preset is a
   complete `zlint.json`; this repository ships `zlint.template.json` as the
   single recommended set.

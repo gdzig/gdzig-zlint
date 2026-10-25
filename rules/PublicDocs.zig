@@ -4,7 +4,8 @@
 //! A doc comment should describe the function's purpose, its inputs, and any
 //! significant return or error behavior.
 //!
-//! Generated `*.mixin.zig` and `*.replace.zig` fragments are skipped.
+//! Hand-written `*.mixin.zig` and `*.replace.zig` fragments are linted. Set
+//! `skip_fragments` to exclude them.
 
 pub const meta: Rule.Meta = .{
     .name = "gdzig-public-docs",
@@ -12,24 +13,15 @@ pub const meta: Rule.Meta = .{
     .default = .warning,
 };
 
-/// Skip generated mixin and replace fragments.
-skip_fragments: bool = true,
+/// Skip hand-written mixin and replace fragments.
+skip_fragments: bool = false,
 
 const PublicDocs = @This();
 
 /// Checks public functions for a doc comment.
 pub fn runOnNode(self: *const PublicDocs, wrapper: NodeWrapper, ctx: *LinterContext) void {
     if (self.skip_fragments and helpers.isFragment(ctx.source.pathname)) return;
-
-    switch (wrapper.node.tag) {
-        .fn_decl,
-        .fn_proto,
-        .fn_proto_simple,
-        .fn_proto_multi,
-        .fn_proto_one,
-        => {},
-        else => return,
-    }
+    if (wrapper.node.tag != .fn_decl) return;
 
     const ast = ctx.ast();
     var buffer: [1]Node.Index = undefined;
@@ -82,11 +74,17 @@ test PublicDocs {
         })
         .run();
 
-    var fragment_impl = PublicDocs{ .skip_fragments = false };
+    var fragment_impl = PublicDocs{};
     var fragment_runner = RuleTester.init(testing.allocator, fragment_impl.rule());
     defer fragment_runner.deinit();
     fragment_runner.setFileName("Thing.mixin.zig");
     try fragment_runner.withFail(&.{"pub fn add(a: u32, b: u32) u32 { return a + b; }"}).run();
+
+    var skip_impl = PublicDocs{ .skip_fragments = true };
+    var skip_runner = RuleTester.init(testing.allocator, skip_impl.rule());
+    defer skip_runner.deinit();
+    skip_runner.setFileName("Thing.mixin.zig");
+    try skip_runner.withPass(&.{"pub fn add(a: u32, b: u32) u32 { return a + b; }"}).run();
 }
 
 const std = @import("std");

@@ -1,11 +1,15 @@
 {
   "$schema": "https://raw.githubusercontent.com/DonIsaac/zlint/refs/tags/v0.10.0/zlint.schema.json",
   "ignore": [
-    "**/*.mixin.zig",
-    "**/*.replace.zig",
-    "src/class/*",
-    "src/builtin/*",
-    "src/global/*"
+    "src/class/**",
+    "src/builtin/**",
+    "src/global/**",
+    "!src/class/**/*.mixin.zig",
+    "!src/class/**/*.replace.zig",
+    "!src/builtin/**/*.mixin.zig",
+    "!src/builtin/**/*.replace.zig",
+    "!src/global/**/*.mixin.zig",
+    "!src/global/**/*.replace.zig"
   ],
   "rules": {
     "gdzig-imports-sorted": [

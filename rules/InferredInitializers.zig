@@ -16,7 +16,8 @@
 //! The same applies to `return T{...}` and `return T.init(...)` when the
 //! enclosing function's return type is `T` (or `!T`).
 //!
-//! Generated `*.mixin.zig` and `*.replace.zig` fragments are skipped.
+//! Hand-written `*.mixin.zig` and `*.replace.zig` fragments are linted. Set
+//! `skip_fragments` to exclude them.
 
 pub const meta: Rule.Meta = .{
     .name = "gdzig-inferred-initializers",
@@ -25,8 +26,8 @@ pub const meta: Rule.Meta = .{
     .fix = .safe_fix,
 };
 
-/// Skip generated mixin and replace fragments.
-skip_fragments: bool = true,
+/// Skip hand-written mixin and replace fragments.
+skip_fragments: bool = false,
 
 /// Check `return T{...}` and `return T.init(...)`.
 check_returns: bool = true,
@@ -248,11 +249,17 @@ test InferredInitializers {
     defer no_returns_runner.deinit();
     try no_returns_runner.withPass(&.{failing_return}).run();
 
-    var fragment_impl = InferredInitializers{ .skip_fragments = false };
+    var fragment_impl = InferredInitializers{};
     var fragment_runner = RuleTester.init(testing.allocator, fragment_impl.rule());
     defer fragment_runner.deinit();
     fragment_runner.setFileName("Config.mixin.zig");
     try fragment_runner.withFail(&.{failing_literal}).run();
+
+    var skip_impl = InferredInitializers{ .skip_fragments = true };
+    var skip_runner = RuleTester.init(testing.allocator, skip_impl.rule());
+    defer skip_runner.deinit();
+    skip_runner.setFileName("Config.mixin.zig");
+    try skip_runner.withPass(&.{failing_literal}).run();
 }
 
 const std = @import("std");

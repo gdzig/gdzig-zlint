@@ -8,7 +8,8 @@
 //!
 //! Single-field containers and single-line struct literals are left alone.
 //!
-//! Generated `*.mixin.zig` and `*.replace.zig` fragments are skipped.
+//! Hand-written `*.mixin.zig` and `*.replace.zig` fragments are linted. Set
+//! `skip_fragments` to exclude them.
 
 pub const meta: Rule.Meta = .{
     .name = "gdzig-trailing-comma",
@@ -17,8 +18,8 @@ pub const meta: Rule.Meta = .{
     .fix = .safe_fix,
 };
 
-/// Skip generated mixin and replace fragments.
-skip_fragments: bool = true,
+/// Skip hand-written mixin and replace fragments.
+skip_fragments: bool = false,
 
 const TrailingComma = @This();
 
@@ -160,11 +161,17 @@ test TrailingComma {
         })
         .run();
 
-    var fragment_impl = TrailingComma{ .skip_fragments = false };
+    var fragment_impl = TrailingComma{};
     var fragment_runner = RuleTester.init(testing.allocator, fragment_impl.rule());
     defer fragment_runner.deinit();
     fragment_runner.setFileName("Thing.mixin.zig");
     try fragment_runner.withFail(&.{failing_container}).run();
+
+    var skip_impl = TrailingComma{ .skip_fragments = true };
+    var skip_runner = RuleTester.init(testing.allocator, skip_impl.rule());
+    defer skip_runner.deinit();
+    skip_runner.setFileName("Thing.mixin.zig");
+    try skip_runner.withPass(&.{failing_container}).run();
 }
 
 const std = @import("std");

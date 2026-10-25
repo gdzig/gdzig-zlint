@@ -5,7 +5,8 @@
 //! TitleCase. A file without top-level fields is a namespace of declarations
 //! and uses snake_case.
 //!
-//! Generated `*.mixin.zig` and `*.replace.zig` fragments are skipped.
+//! Fragments are skipped. A fragment's contents are injected into a generated
+//! file, so they cannot be classified as a type or a namespace on their own.
 
 pub const meta: Rule.Meta = .{
     .name = "gdzig-file-name-case",
@@ -13,7 +14,7 @@ pub const meta: Rule.Meta = .{
     .default = .warning,
 };
 
-/// Skip generated mixin and replace fragments.
+/// Skip hand-written mixin and replace fragments.
 skip_fragments: bool = true,
 
 const FileNameCase = @This();

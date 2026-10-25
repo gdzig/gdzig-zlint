@@ -8,7 +8,8 @@
 //! When a namespace file exposes a single named type, the alias may name that
 //! member instead: `const Version = @import("version.zig").Version;`.
 //!
-//! Generated `*.mixin.zig` and `*.replace.zig` fragments are skipped.
+//! Hand-written `*.mixin.zig` and `*.replace.zig` fragments are linted. Set
+//! `skip_fragments` to exclude them.
 
 pub const meta: Rule.Meta = .{
     .name = "gdzig-import-alias-case",
@@ -16,8 +17,8 @@ pub const meta: Rule.Meta = .{
     .default = .warning,
 };
 
-/// Skip generated mixin and replace fragments.
-skip_fragments: bool = true,
+/// Skip hand-written mixin and replace fragments.
+skip_fragments: bool = false,
 
 const ImportAliasCase = @This();
 
@@ -178,11 +179,20 @@ test ImportAliasCase {
     const fragment_source =
         \\const Aabb = @import("Aabb.mixin.zig");
     ;
-    var fragment_impl = ImportAliasCase{ .skip_fragments = false };
+    var fragment_impl = ImportAliasCase{};
     var fragment_runner = RuleTester.init(testing.allocator, fragment_impl.rule());
     defer fragment_runner.deinit();
     fragment_runner.setFileName("Aabb.mixin.zig");
-    try fragment_runner.withPass(&.{fragment_source}).run();
+    try fragment_runner
+        .withPass(&.{fragment_source})
+        .withFail(&.{"const aabb = @import(\"Aabb.mixin.zig\");"})
+        .run();
+
+    var skip_impl = ImportAliasCase{ .skip_fragments = true };
+    var skip_runner = RuleTester.init(testing.allocator, skip_impl.rule());
+    defer skip_runner.deinit();
+    skip_runner.setFileName("Aabb.mixin.zig");
+    try skip_runner.withPass(&.{"const aabb = @import(\"Aabb.mixin.zig\");"}).run();
 }
 
 const std = @import("std");
