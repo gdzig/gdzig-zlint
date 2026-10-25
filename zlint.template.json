@@ -8,7 +8,7 @@
     "src/global/*"
   ],
   "rules": {
-    "gdzig-imports-last": [
+    "gdzig-imports-sorted": [
       "warn",
       {
         "std_modules": [
@@ -17,6 +17,7 @@
         ]
       }
     ],
+    "gdzig-imports-last": "warn",
     "gdzig-file-name-case": "warn",
     "gdzig-import-alias-case": "warn",
     "gdzig-tests-last": "warn",
