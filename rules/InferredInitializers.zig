@@ -36,8 +36,10 @@
 //! cross-file paths fall back to Zig's naming contract: the rightmost type name
 //! must be TitleCase and the selected member must start lowercase. The fallback
 //! can misread an imported TitleCase factory that returns a value, and an
-//! imported fallible `fn init() !T` used without `try`. `Foo.Bar` and
-//! `std.ArrayList(u8)` are not reported because they name types, not values.
+//! imported fallible `fn init() !T` used without `try`. A bare imported member
+//! such as `Foo.init` may also be a function reference rather than a value.
+//! `Foo.Bar` and `std.ArrayList(u8)` are not reported because they name types,
+//! not values.
 //! An unannotated `[_]T{...}` is not reported because no annotation can spell
 //! the inferred length.
 //!
