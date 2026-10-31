@@ -176,7 +176,7 @@ fn inferCall(ctx: *LinterContext, call_node: Node.Index) ?Inferred {
     switch (helpers.resolveLocalBase(ctx, base)) {
         .container => |container| {
             const member = helpers.findExport(ctx, container, member_name) orelse return null;
-            if (!helpers.callReturnsType(ctx, member, base)) return null;
+            if (!helpers.callReturnsType(ctx, container, member, base)) return null;
             return .{ .type_node = base, .use_dot = false };
         },
         .non_type => return null,
@@ -519,8 +519,13 @@ const helpers = struct {
     }
 
     /// A call to a local function constructs `base` only when it returns that
-    /// exact type (or `Self` / `@This()`).
-    fn callReturnsType(ctx: *LinterContext, member: Symbol.Id, base_node: Node.Index) bool {
+    /// exact type (by source, symbol, or `Self` / `@This()`).
+    fn callReturnsType(
+        ctx: *LinterContext,
+        container: Symbol.Id,
+        member: Symbol.Id,
+        base_node: Node.Index,
+    ) bool {
         const ast = ctx.ast();
         const symbol = ctx.symbols().get(member);
         if (!symbol.flags.s_fn) return false;
@@ -532,7 +537,17 @@ const helpers = struct {
         const return_source = sourceOf(ctx, return_type);
         if (std.mem.eql(u8, return_source, "Self") or
             std.mem.eql(u8, return_source, "@This()")) return true;
-        return std.mem.eql(u8, return_source, sourceOf(ctx, base_node));
+        if (std.mem.eql(u8, return_source, sourceOf(ctx, base_node))) return true;
+
+        // A nested type can return its short name (`Allocating`), so compare
+        // the resolved symbol rather than only the source text.
+        if (!isPurePath(ast, return_type)) return false;
+        const root = rootIdentifier(ast, return_type) orelse return false;
+        const scope = ctx.links().scopes.items[@intFromEnum(root)];
+        const name = ast.tokenSlice(ast.nodeMainToken(root));
+        const root_symbol = ctx.semantic.resolveBinding(scope, name, .decls) orelse return false;
+        const resolved = resolvePath(ctx, return_type, root_symbol) orelse return false;
+        return resolved.eql(container);
     }
 
     /// The AST drops the `!`/`?` wrapper from a function prototype's return
@@ -747,6 +762,44 @@ test InferredInitializers {
         \\const Color = enum { red, green };
         \\const color = Color.red;
     ;
+    const failing_local_nested =
+        \\const Writer = struct {
+        \\    const Allocating = struct {
+        \\        fn init(allocator: void) Allocating {
+        \\            _ = allocator;
+        \\            return .{};
+        \\        }
+        \\    };
+        \\};
+        \\var writer = Writer.Allocating.init({});
+    ;
+    const fixed_local_nested =
+        \\const Writer = struct {
+        \\    const Allocating = struct {
+        \\        fn init(allocator: void) Allocating {
+        \\            _ = allocator;
+        \\            return .{};
+        \\        }
+        \\    };
+        \\};
+        \\var writer: Writer.Allocating = .init({});
+    ;
+    const failing_this_factory =
+        \\const Factory = struct {
+        \\    fn make() @This() {
+        \\        return .{};
+        \\    }
+        \\};
+        \\const made = Factory.make();
+    ;
+    const fixed_this_factory =
+        \\const Factory = struct {
+        \\    fn make() @This() {
+        \\        return .{};
+        \\    }
+        \\};
+        \\const made: Factory = .make();
+    ;
 
     var impl: InferredInitializers = .{};
     var runner: RuleTester = .init(testing.allocator, impl.rule());
@@ -799,6 +852,8 @@ test InferredInitializers {
             failing_unannotated_array,
             failing_local_enum,
             fail_local_enum_member,
+            failing_local_nested,
+            failing_this_factory,
         })
         .withFix(&.{
             .{
@@ -860,6 +915,14 @@ test InferredInitializers {
             .{
                 .src = failing_local_enum,
                 .expected = fixed_local_enum,
+            },
+            .{
+                .src = failing_local_nested,
+                .expected = fixed_local_nested,
+            },
+            .{
+                .src = failing_this_factory,
+                .expected = fixed_this_factory,
             },
         })
         .run();
