@@ -172,8 +172,8 @@ test TrailingComma {
         \\};
     ;
 
-    var impl = TrailingComma{};
-    var runner = RuleTester.init(testing.allocator, impl.rule());
+    var impl: TrailingComma = .{};
+    var runner: RuleTester = .init(testing.allocator, impl.rule());
     defer runner.deinit();
     try runner
         .withPass(&.{
@@ -207,14 +207,14 @@ test TrailingComma {
         })
         .run();
 
-    var fragment_impl = TrailingComma{};
-    var fragment_runner = RuleTester.init(testing.allocator, fragment_impl.rule());
+    var fragment_impl: TrailingComma = .{};
+    var fragment_runner: RuleTester = .init(testing.allocator, fragment_impl.rule());
     defer fragment_runner.deinit();
     fragment_runner.setFileName("Thing.mixin.zig");
     try fragment_runner.withFail(&.{failing_container}).run();
 
-    var skip_impl = TrailingComma{ .skip_fragments = true };
-    var skip_runner = RuleTester.init(testing.allocator, skip_impl.rule());
+    var skip_impl: TrailingComma = .{ .skip_fragments = true };
+    var skip_runner: RuleTester = .init(testing.allocator, skip_impl.rule());
     defer skip_runner.deinit();
     skip_runner.setFileName("Thing.mixin.zig");
     try skip_runner.withPass(&.{failing_container}).run();

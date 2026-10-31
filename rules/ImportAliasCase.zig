@@ -189,8 +189,8 @@ test ImportAliasCase {
         \\}
     ;
 
-    var implementation = ImportAliasCase{};
-    var runner = RuleTester.init(testing.allocator, implementation.rule());
+    var implementation: ImportAliasCase = .{};
+    var runner: RuleTester = .init(testing.allocator, implementation.rule());
     defer runner.deinit();
     runner.setFileName("Test.zig");
     try runner
@@ -207,8 +207,8 @@ test ImportAliasCase {
     const fragment_source =
         \\const Aabb = @import("Aabb.mixin.zig");
     ;
-    var fragment_impl = ImportAliasCase{};
-    var fragment_runner = RuleTester.init(testing.allocator, fragment_impl.rule());
+    var fragment_impl: ImportAliasCase = .{};
+    var fragment_runner: RuleTester = .init(testing.allocator, fragment_impl.rule());
     defer fragment_runner.deinit();
     fragment_runner.setFileName("Aabb.mixin.zig");
     try fragment_runner
@@ -216,8 +216,8 @@ test ImportAliasCase {
         .withFail(&.{"const aabb = @import(\"Aabb.mixin.zig\");"})
         .run();
 
-    var skip_impl = ImportAliasCase{ .skip_fragments = true };
-    var skip_runner = RuleTester.init(testing.allocator, skip_impl.rule());
+    var skip_impl: ImportAliasCase = .{ .skip_fragments = true };
+    var skip_runner: RuleTester = .init(testing.allocator, skip_impl.rule());
     defer skip_runner.deinit();
     skip_runner.setFileName("Aabb.mixin.zig");
     try skip_runner.withPass(&.{"const aabb = @import(\"Aabb.mixin.zig\");"}).run();

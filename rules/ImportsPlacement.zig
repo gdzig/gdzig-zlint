@@ -276,8 +276,8 @@ test ImportsPlacement {
         \\const Writer = std.Io.Writer;
     ;
 
-    var bottom_impl = ImportsPlacement{};
-    var bottom_runner = RuleTester.init(testing.allocator, bottom_impl.rule());
+    var bottom_impl: ImportsPlacement = .{};
+    var bottom_runner: RuleTester = .init(testing.allocator, bottom_impl.rule());
     defer bottom_runner.deinit();
     bottom_runner.setFileName("Test.zig");
     try bottom_runner
@@ -285,8 +285,8 @@ test ImportsPlacement {
         .withFail(&.{ import_at_top, mixed, derived_alias_at_top })
         .run();
 
-    var top_impl = ImportsPlacement{ .position = .top };
-    var top_runner = RuleTester.init(testing.allocator, top_impl.rule());
+    var top_impl: ImportsPlacement = .{ .position = .top };
+    var top_runner: RuleTester = .init(testing.allocator, top_impl.rule());
     defer top_runner.deinit();
     top_runner.setFileName("Test.zig");
     try top_runner
@@ -294,14 +294,14 @@ test ImportsPlacement {
         .withFail(&.{ import_at_bottom, mixed, derived_alias_at_bottom })
         .run();
 
-    var fragment_impl = ImportsPlacement{ .skip_fragments = true };
-    var fragment_runner = RuleTester.init(testing.allocator, fragment_impl.rule());
+    var fragment_impl: ImportsPlacement = .{ .skip_fragments = true };
+    var fragment_runner: RuleTester = .init(testing.allocator, fragment_impl.rule());
     defer fragment_runner.deinit();
     fragment_runner.setFileName("Aabb.mixin.zig");
     try fragment_runner.withPass(&.{import_at_top}).run();
 
-    var fragment_check = ImportsPlacement{};
-    var fragment_check_runner = RuleTester.init(testing.allocator, fragment_check.rule());
+    var fragment_check: ImportsPlacement = .{};
+    var fragment_check_runner: RuleTester = .init(testing.allocator, fragment_check.rule());
     defer fragment_check_runner.deinit();
     fragment_check_runner.setFileName("Aabb.mixin.zig");
     try fragment_check_runner.withFail(&.{import_at_top}).run();

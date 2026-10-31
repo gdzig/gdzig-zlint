@@ -73,8 +73,8 @@ const helpers = struct {
 test PublicDocs {
     @setEvalBranchQuota(100_000);
 
-    var impl = PublicDocs{};
-    var runner = RuleTester.init(testing.allocator, impl.rule());
+    var impl: PublicDocs = .{};
+    var runner: RuleTester = .init(testing.allocator, impl.rule());
     defer runner.deinit();
     try runner
         .withPass(&.{
@@ -94,14 +94,14 @@ test PublicDocs {
         })
         .run();
 
-    var fragment_impl = PublicDocs{};
-    var fragment_runner = RuleTester.init(testing.allocator, fragment_impl.rule());
+    var fragment_impl: PublicDocs = .{};
+    var fragment_runner: RuleTester = .init(testing.allocator, fragment_impl.rule());
     defer fragment_runner.deinit();
     fragment_runner.setFileName("Thing.mixin.zig");
     try fragment_runner.withFail(&.{"pub fn add(a: u32, b: u32) u32 { return a + b; }"}).run();
 
-    var skip_impl = PublicDocs{ .skip_fragments = true };
-    var skip_runner = RuleTester.init(testing.allocator, skip_impl.rule());
+    var skip_impl: PublicDocs = .{ .skip_fragments = true };
+    var skip_runner: RuleTester = .init(testing.allocator, skip_impl.rule());
     defer skip_runner.deinit();
     skip_runner.setFileName("Thing.mixin.zig");
     try skip_runner.withPass(&.{"pub fn add(a: u32, b: u32) u32 { return a + b; }"}).run();

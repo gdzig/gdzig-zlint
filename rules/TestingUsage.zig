@@ -51,7 +51,7 @@ pub fn runOnce(self: *const TestingUsage, ctx: *LinterContext) void {
         if (!helpers.identifierEquals(ctx, name, self.namespace)) continue;
         if (helpers.isStdTestingAlias(ctx, decls[index])) continue;
 
-        const symbol_id = Symbol.Id.from(index);
+        const symbol_id: Symbol.Id = .from(index);
         for (table.getReferences(symbol_id)) |reference_id| {
             const reference = table.getReference(reference_id);
             if (!(reference.flags.isSelfRead() or reference.flags.type or reference.flags.call)) continue;
@@ -233,8 +233,8 @@ const helpers = struct {
 test TestingUsage {
     @setEvalBranchQuota(100_000);
 
-    var impl = TestingUsage{};
-    var runner = RuleTester.init(testing.allocator, impl.rule());
+    var impl: TestingUsage = .{};
+    var runner: RuleTester = .init(testing.allocator, impl.rule());
     defer runner.deinit();
     try runner
         .withPass(&.{
@@ -275,31 +275,31 @@ test TestingUsage {
         })
         .run();
 
-    var member_impl = TestingUsage{ .report_member_access = true };
-    var member_runner = RuleTester.init(testing.allocator, member_impl.rule());
+    var member_impl: TestingUsage = .{ .report_member_access = true };
+    var member_runner: RuleTester = .init(testing.allocator, member_impl.rule());
     defer member_runner.deinit();
     try member_runner.withFail(&.{"const value = Codegen.testing.value;"}).run();
 
-    var test_path_impl = TestingUsage{};
-    var test_path_runner = RuleTester.init(testing.allocator, test_path_impl.rule());
+    var test_path_impl: TestingUsage = .{};
+    var test_path_runner: RuleTester = .init(testing.allocator, test_path_impl.rule());
     defer test_path_runner.deinit();
     test_path_runner.setFileName("test/root.zig");
     try test_path_runner.withPass(&.{"fn run() void {\n    testing.helper();\n}"}).run();
 
-    var strict_path_impl = TestingUsage{ .allow_test_paths = false };
-    var strict_path_runner = RuleTester.init(testing.allocator, strict_path_impl.rule());
+    var strict_path_impl: TestingUsage = .{ .allow_test_paths = false };
+    var strict_path_runner: RuleTester = .init(testing.allocator, strict_path_impl.rule());
     defer strict_path_runner.deinit();
     strict_path_runner.setFileName("test/root.zig");
     try strict_path_runner.withFail(&.{"fn run() void {\n    testing.helper();\n}"}).run();
 
-    var fragment_impl = TestingUsage{};
-    var fragment_runner = RuleTester.init(testing.allocator, fragment_impl.rule());
+    var fragment_impl: TestingUsage = .{};
+    var fragment_runner: RuleTester = .init(testing.allocator, fragment_impl.rule());
     defer fragment_runner.deinit();
     fragment_runner.setFileName("Thing.mixin.zig");
     try fragment_runner.withFail(&.{"fn run() void {\n    testing.helper();\n}"}).run();
 
-    var skip_impl = TestingUsage{ .skip_fragments = true };
-    var skip_runner = RuleTester.init(testing.allocator, skip_impl.rule());
+    var skip_impl: TestingUsage = .{ .skip_fragments = true };
+    var skip_runner: RuleTester = .init(testing.allocator, skip_impl.rule());
     defer skip_runner.deinit();
     skip_runner.setFileName("Thing.mixin.zig");
     try skip_runner.withPass(&.{"fn run() void {\n    testing.helper();\n}"}).run();

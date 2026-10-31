@@ -112,32 +112,32 @@ test FileNameCase {
         \\var counter: u32 = 0;
     ;
 
-    var type_impl = FileNameCase{};
-    var type_runner = RuleTester.init(testing.allocator, type_impl.rule());
+    var type_impl: FileNameCase = .{};
+    var type_runner: RuleTester = .init(testing.allocator, type_impl.rule());
     defer type_runner.deinit();
     type_runner.setFileName("Thing.zig");
     try type_runner.withPass(&.{type_source}).withFail(&.{ namespace_source, var_source }).run();
 
-    var namespace_impl = FileNameCase{};
-    var namespace_runner = RuleTester.init(testing.allocator, namespace_impl.rule());
+    var namespace_impl: FileNameCase = .{};
+    var namespace_runner: RuleTester = .init(testing.allocator, namespace_impl.rule());
     defer namespace_runner.deinit();
     namespace_runner.setFileName("thing.zig");
     try namespace_runner.withPass(&.{ namespace_source, var_source }).withFail(&.{type_source}).run();
 
-    var fragment_impl = FileNameCase{ .skip_fragments = false };
-    var fragment_runner = RuleTester.init(testing.allocator, fragment_impl.rule());
+    var fragment_impl: FileNameCase = .{ .skip_fragments = false };
+    var fragment_runner: RuleTester = .init(testing.allocator, fragment_impl.rule());
     defer fragment_runner.deinit();
     fragment_runner.setFileName("Aabb.mixin.zig");
     try fragment_runner.withPass(&.{type_source}).run();
 
-    var leading_digit_type = FileNameCase{};
-    var leading_digit_type_runner = RuleTester.init(testing.allocator, leading_digit_type.rule());
+    var leading_digit_type: FileNameCase = .{};
+    var leading_digit_type_runner: RuleTester = .init(testing.allocator, leading_digit_type.rule());
     defer leading_digit_type_runner.deinit();
     leading_digit_type_runner.setFileName("123Thing.zig");
     try leading_digit_type_runner.withFail(&.{type_source}).run();
 
-    var leading_digit_namespace = FileNameCase{};
-    var leading_digit_namespace_runner = RuleTester.init(testing.allocator, leading_digit_namespace.rule());
+    var leading_digit_namespace: FileNameCase = .{};
+    var leading_digit_namespace_runner: RuleTester = .init(testing.allocator, leading_digit_namespace.rule());
     defer leading_digit_namespace_runner.deinit();
     leading_digit_namespace_runner.setFileName("123thing.zig");
     try leading_digit_namespace_runner.withFail(&.{namespace_source}).run();

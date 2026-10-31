@@ -259,14 +259,14 @@ const helpers = struct {
 
     fn collect(ctx: *LinterContext, std_modules: []const []const u8) Collected {
         const ast = ctx.ast();
-        var result = Collected{ .gpa = ctx.gpa };
+        var result: Collected = .{ .gpa = ctx.gpa };
 
         for (ast.rootDecls()) |decl| {
             const info = importInfoFromDecl(ast, decl) orelse continue;
             const name = declName(ast, decl) orelse continue;
             const section = sectionOf(info.path, std_modules);
             const module_name = moduleName(info.path);
-            const root = RootInfo{
+            const root: RootInfo = .{
                 .section = section,
                 .module_name = module_name,
                 .identity = info.path,
@@ -463,7 +463,7 @@ const helpers = struct {
 
     fn canFix(ctx: *LinterContext, entries: []const Entry) bool {
         if (entries.len < 2) return false;
-        const span = Span.new(
+        const span: Span = .new(
             ctx.semantic.nodeSpan(entries[0].decl).start,
             declSpan(ctx, entries[entries.len - 1].decl).end,
         );
@@ -490,7 +490,7 @@ const helpers = struct {
     ) ?ReorderFix {
         if (source_entries.len == 0 or sorted.len == 0) return null;
 
-        const span = Span.new(
+        const span: Span = .new(
             ctx.semantic.nodeSpan(source_entries[0].decl).start,
             declSpan(ctx, source_entries[source_entries.len - 1].decl).end,
         );
@@ -643,8 +643,8 @@ test ImportsSorted {
         \\const Context = @import("../Context.zig");
     ;
 
-    var implementation = ImportsSorted{};
-    var runner = RuleTester.init(testing.allocator, implementation.rule());
+    var implementation: ImportsSorted = .{};
+    var runner: RuleTester = .init(testing.allocator, implementation.rule());
     defer runner.deinit();
     runner.setFileName("Test.zig");
     try runner
@@ -671,26 +671,26 @@ test ImportsSorted {
         \\
         \\const casez = @import("casez");
     ;
-    var with_std_impl = ImportsSorted{ .std_modules = &.{ "std", "builtin", "build_options" } };
-    var with_std_runner = RuleTester.init(testing.allocator, with_std_impl.rule());
+    var with_std_impl: ImportsSorted = .{ .std_modules = &.{ "std", "builtin", "build_options" } };
+    var with_std_runner: RuleTester = .init(testing.allocator, with_std_impl.rule());
     defer with_std_runner.deinit();
     with_std_runner.setFileName("Test.zig");
     try with_std_runner.withPass(&.{build_options_with_std}).run();
 
-    var default_impl = ImportsSorted{};
-    var default_runner = RuleTester.init(testing.allocator, default_impl.rule());
+    var default_impl: ImportsSorted = .{};
+    var default_runner: RuleTester = .init(testing.allocator, default_impl.rule());
     defer default_runner.deinit();
     default_runner.setFileName("Test.zig");
     try default_runner.withFail(&.{build_options_with_std}).run();
 
-    var fragment_impl = ImportsSorted{ .skip_fragments = true };
-    var fragment_runner = RuleTester.init(testing.allocator, fragment_impl.rule());
+    var fragment_impl: ImportsSorted = .{ .skip_fragments = true };
+    var fragment_runner: RuleTester = .init(testing.allocator, fragment_impl.rule());
     defer fragment_runner.deinit();
     fragment_runner.setFileName("Aabb.mixin.zig");
     try fragment_runner.withPass(&.{package_before_std}).run();
 
-    var fragment_check = ImportsSorted{};
-    var fragment_check_runner = RuleTester.init(testing.allocator, fragment_check.rule());
+    var fragment_check: ImportsSorted = .{};
+    var fragment_check_runner: RuleTester = .init(testing.allocator, fragment_check.rule());
     defer fragment_check_runner.deinit();
     fragment_check_runner.setFileName("Aabb.mixin.zig");
     try fragment_check_runner.withFail(&.{package_before_std}).run();

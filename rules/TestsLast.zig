@@ -318,8 +318,8 @@ test TestsLast {
         \\};
     ;
 
-    var implementation = TestsLast{};
-    var runner = RuleTester.init(testing.allocator, implementation.rule());
+    var implementation: TestsLast = .{};
+    var runner: RuleTester = .init(testing.allocator, implementation.rule());
     defer runner.deinit();
     runner.setFileName("Test.zig");
     try runner
@@ -327,20 +327,20 @@ test TestsLast {
         .withFail(&.{ production_after_test, testing_namespace_not_adjacent, import_before_test, nested_test })
         .run();
 
-    var no_check_impl = TestsLast{ .check_testing_namespace = false };
-    var no_check_runner = RuleTester.init(testing.allocator, no_check_impl.rule());
+    var no_check_impl: TestsLast = .{ .check_testing_namespace = false };
+    var no_check_runner: RuleTester = .init(testing.allocator, no_check_impl.rule());
     defer no_check_runner.deinit();
     no_check_runner.setFileName("Test.zig");
     try no_check_runner.withPass(&.{testing_namespace_not_adjacent}).run();
 
-    var fragment_impl = TestsLast{ .skip_fragments = true };
-    var fragment_runner = RuleTester.init(testing.allocator, fragment_impl.rule());
+    var fragment_impl: TestsLast = .{ .skip_fragments = true };
+    var fragment_runner: RuleTester = .init(testing.allocator, fragment_impl.rule());
     defer fragment_runner.deinit();
     fragment_runner.setFileName("Aabb.mixin.zig");
     try fragment_runner.withPass(&.{production_after_test}).run();
 
-    var fragment_check = TestsLast{};
-    var fragment_check_runner = RuleTester.init(testing.allocator, fragment_check.rule());
+    var fragment_check: TestsLast = .{};
+    var fragment_check_runner: RuleTester = .init(testing.allocator, fragment_check.rule());
     defer fragment_check_runner.deinit();
     fragment_check_runner.setFileName("Aabb.mixin.zig");
     try fragment_check_runner.withFail(&.{production_after_test}).run();

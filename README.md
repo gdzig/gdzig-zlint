@@ -17,7 +17,7 @@ pinned ZLint release plus the rules in `rules/`.
 | `gdzig-tests-last` | Tests are at file scope, grouped after production declarations and before the final imports; `testing` sits directly above the first test |
 | `gdzig-trailing-comma` | Nonempty container declarations (enums excluded) and multiline struct literals end with a trailing comma, so `zig fmt` puts each field on its own line; safe autofix available |
 | `gdzig-public-docs` | Public functions, including extern declarations, have a `///` doc comment (presence only) |
-| `gdzig-inferred-initializers` | Uses `.{}` and `.init(...)` when the destination type is already known, including matching return types; safe autofix available |
+| `gdzig-inferred-initializers` | Uses `.{}` and `.init(...)` when the destination type is known from an annotation, a return type, or an unannotated initializer that names a type; safe autofix available |
 | `gdzig-testing-usage` | Direct references to a local `testing` namespace are limited to test code; member-access checking is opt-in |
 
 Hand-written `*.mixin.zig` and `*.replace.zig` fragments are linted by default.
@@ -68,6 +68,12 @@ also have safe autofixes. The other custom rules are diagnostics-only. ZLint
 0.10.0 can also apply dangerous built-in fixes with plain `--fix`, so review the
 diff before enabling it in pre-commit. The import-order fix skips blocks
 containing comments or interleaved declarations.
+
+For an unannotated declaration, `gdzig-inferred-initializers` inserts the
+inferred annotation and drops the prefix. It reports without a fix when the
+replaced span contains a comment, or when the declaration has `align`,
+`addrspace`, or `section`, because a single-span replacement would remove that
+text.
 
 Run `gdzig-zlint --fix`, then `zig fmt`, after enabling
 `gdzig-trailing-comma`. The rule adds the comma; `zig fmt` expands the fields.
@@ -149,9 +155,19 @@ Rule options:
   - `report_member_access` (default `false`)
   - `allow_test_paths` (default `true`)
 
-`gdzig-inferred-initializers` handles annotated variable declarations and
-returns whose type matches the explicit initializer. It does not inspect
-function arguments. `gdzig-testing-usage` ignores `std.testing` aliases and
+`gdzig-inferred-initializers` handles annotated variable declarations, returns
+whose type matches the explicit initializer, and unannotated declarations whose
+initializer names a type (`Type.fn(...)`, `Type.member`, `Type{...}`). A local
+type is checked against the symbol table: a call must be an exported function
+returning that type (not `!T` or `?T`), and a bare member must be an enum or
+error member. Imported and cross-file paths use Zig's naming contract: the
+rightmost type name is TitleCase and the selected member starts lowercase, so
+`std.ArrayList(u8).init(...)` and `godot.Object.init()` are flagged while
+`std.mem.zeroes(...)` is not. The fallback cannot see an imported return type,
+so an imported TitleCase factory that returns a value can be misread as a type
+construction. An unannotated `[_]T{...}` is not reported because the annotation
+cannot spell the inferred length. The rule does not inspect function arguments.
+`gdzig-testing-usage` ignores `std.testing` aliases and
 paths under `test` or `tests`. It reports local references such as
 `testing.helper()` outside test code. Set `report_member_access` to also check
 `module.testing.helper`; that can reject legitimate fixture tools, so it is
