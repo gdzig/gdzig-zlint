@@ -33,13 +33,15 @@
 //! `[2]u8{...}`) are reported exactly. A local `Type.fn(...)` or `Type.member`
 //! is checked against the local symbol table: the member must be an exported
 //! function returning the type, or an enum/error member. Imported and
-//! cross-file paths fall back to Zig's naming contract: the rightmost type name
-//! must be TitleCase and the selected member must start lowercase. The fallback
-//! can misread an imported TitleCase factory that returns a value, and an
-//! imported fallible `fn init() !T` used without `try`. A bare imported member
-//! such as `Foo.init` may also be a function reference rather than a value.
-//! `Foo.Bar` and `std.ArrayList(u8)` are not reported because they name types,
-//! not values.
+//! cross-file calls fall back to Zig's naming contract only for idiomatic
+//! initializers: the rightmost type name must be TitleCase and the selected
+//! member must start with `init` or `from`. Other static factories (`call`,
+//! `instantiate`, `getProcessId`, `create`) and cross-file bare members
+//! (`Variant.nil`, `Variant.Tag.allocatesForType`) are not guessed, because
+//! their return type is unknown. The fallback can still misread an imported
+//! `init*`/`from*` factory that returns another type, and an imported fallible
+//! `fn init() !T` used without `try`. `Foo.Bar` and `std.ArrayList(u8)` are not
+//! reported because they name types, not values.
 //! An unannotated `[_]T{...}` is not reported because no annotation can spell
 //! the inferred length.
 //!
@@ -184,7 +186,7 @@ fn inferCall(ctx: *LinterContext, call_node: Node.Index) ?Inferred {
         .non_type => return null,
         .unknown => {
             if (!helpers.isNamedType(ast, base)) return null;
-            if (!helpers.isValueField(member_name)) return null;
+            if (!helpers.isInitializerName(member_name)) return null;
             return .{ .type_node = base, .use_dot = false };
         },
     }
@@ -203,11 +205,9 @@ fn inferFieldAccess(ctx: *LinterContext, node: Node.Index) ?Inferred {
             return .{ .type_node = base, .use_dot = false };
         },
         .non_type => return null,
-        .unknown => {
-            if (!helpers.isNamedType(ast, base)) return null;
-            if (!helpers.isValueField(member_name)) return null;
-            return .{ .type_node = base, .use_dot = false };
-        },
+        // Cross-file bare members are not guessed: they may be constants or
+        // function references rather than values of the base type.
+        .unknown => return null,
     }
 }
 
@@ -593,10 +593,10 @@ const helpers = struct {
         };
     }
 
-    /// A value member (function or value) starts lowercase.
-    fn isValueField(name: []const u8) bool {
-        if (name.len == 0) return false;
-        return std.ascii.isLower(name[0]) or name[0] == '_';
+    /// Cross-file calls are only guessed for idiomatic initializer names.
+    fn isInitializerName(name: []const u8) bool {
+        return std.mem.startsWith(u8, name, "init") or
+            std.mem.startsWith(u8, name, "from");
     }
 
     fn enclosingReturnType(ctx: *LinterContext, node: Node.Index) ?Node.Index {
@@ -682,11 +682,11 @@ test InferredInitializers {
     const fixed_unannotated_literal =
         \\const config: Config = .{ .enabled = true };
     ;
-    const failing_unannotated_member =
-        \\const default = Config.default;
+    const failing_unannotated_from =
+        \\const parts = Pair.fromParts(1, 2);
     ;
-    const fixed_unannotated_member =
-        \\const default: Config = .default;
+    const fixed_unannotated_from =
+        \\const parts: Pair = .fromParts(1, 2);
     ;
     const failing_unannotated_nested =
         \\var writer = Writer.Allocating.init(allocator);
@@ -827,6 +827,15 @@ test InferredInitializers {
             "const value = codegen.testing.value;",
             "const value = Foo.bar.baz();",
             "const value = Foo.Bar;",
+            "const value = Object.call(x, y);",
+            "const value = ClassDb.instantiate(x);",
+            "const value = Foo.getProcessId();",
+            "const value = Foo.create();",
+            "const value = Foo.upcast(x);",
+            "const value = std.Io.Timestamp.now(x);",
+            "const value = Config.default;",
+            "const value = Variant.nil;",
+            "const value = Variant.Tag.allocatesForType;",
             "const rule_files = [_][]const u8{ \"a\", \"b\" };",
             "const bytes = [_:0]u8{ 'a', 0 };",
             pass_local_factory_other_type,
@@ -845,8 +854,8 @@ test InferredInitializers {
             failing_array,
             failing_unannotated_call,
             failing_unannotated_literal,
-            failing_unannotated_member,
             failing_unannotated_nested,
+            failing_unannotated_from,
             "const pair = Pair{ 1, 2 };",
             "const value = Foo.Bar{};",
             failing_unannotated_std,
@@ -895,12 +904,12 @@ test InferredInitializers {
                 .expected = fixed_unannotated_literal,
             },
             .{
-                .src = failing_unannotated_member,
-                .expected = fixed_unannotated_member,
-            },
-            .{
                 .src = failing_unannotated_nested,
                 .expected = fixed_unannotated_nested,
+            },
+            .{
+                .src = failing_unannotated_from,
+                .expected = fixed_unannotated_from,
             },
             .{
                 .src = failing_unannotated_std,

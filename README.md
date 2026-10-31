@@ -161,14 +161,17 @@ initializer names a type (`Type.fn(...)`, `Type.member`, `Type{...}`). A local
 type is checked against the symbol table: a call must be an exported function
 returning that type (not `!T` or `?T`), and a bare member must be an enum or
 error member. Imported and cross-file paths use Zig's naming contract: the
-rightmost type name is TitleCase and the selected member starts lowercase, so
-`std.ArrayList(u8).init(...)` and `godot.Object.init()` are flagged while
-`std.mem.zeroes(...)` is not. The fallback cannot see an imported return type,
-so an imported TitleCase factory that returns a value can be misread as a type
-construction, and a bare imported member such as `Foo.init` can be a function
-reference rather than a value. An unannotated `[_]T{...}` is not reported
-because the annotation cannot spell the inferred length. The rule does not
-inspect function arguments.
+rightmost type name is TitleCase and, for calls only, the selected member starts
+with `init` or `from`. So `std.ArrayList(u8).init(...)`,
+`godot.Object.init()`, and `Pair.fromParts(...)` are flagged while
+`std.mem.zeroes(...)`, `Object.call(...)`, and `ClassDb.instantiate(...)` are
+not. Cross-file bare members (`Config.default`, `Variant.nil`,
+`Variant.Tag.allocatesForType`) are not guessed at all, because they may be
+constants or function references rather than values of the base type. The
+fallback cannot see an imported return type, so an imported `init*`/`from*`
+factory that returns another type can be misread as the prefix type. An
+unannotated `[_]T{...}` is not reported because the annotation cannot spell the
+inferred length. The rule does not inspect function arguments.
 `gdzig-testing-usage` ignores `std.testing` aliases and
 paths under `test` or `tests`. It reports local references such as
 `testing.helper()` outside test code. Set `report_member_access` to also check
