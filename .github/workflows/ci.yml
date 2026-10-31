@@ -1,14 +1,25 @@
 name: CI
 
+# pull_request_target always runs for fork PRs, regardless of the repository's
+# fork-approval policy. The workflow file comes from the trusted base branch and
+# the PR head is checked out explicitly below, with a read-only token and
+# without persisting credentials, so untrusted PR code cannot write back.
 on:
   push:
-  pull_request:
+  pull_request_target:
+
+permissions:
+  contents: read
 
 jobs:
   test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # pull_request_target checks out the base branch by default.
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
 
       - uses: mlugg/setup-zig@v2
         with:
